@@ -219,53 +219,59 @@ function LuptonEngine()
             outputId
          );
 
-         // Get source image data
-         var rect = new Rect(0, 0, image.width, image.height);
-         var R = new Vector(image.width * image.height);
-         var G = new Vector(image.width * image.height);
-         var B = new Vector(image.width * image.height);
+         var outputImage = outputWindow.mainView.image;
 
-         image.getSamples(R, rect, 0);
-         image.getSamples(G, rect, 1);
-         image.getSamples(B, rect, 2);
+         // Process using direct pixel access
+         outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
 
-         // Process pixels
          var globalMax = 0;
-         var Rout = new Vector(R.length);
-         var Gout = new Vector(G.length);
-         var Bout = new Vector(B.length);
+         var width = image.width;
+         var height = image.height;
 
-         for (var i = 0; i < R.length; i++)
+         // First pass: process all pixels
+         for (var y = 0; y < height; y++)
          {
-            var result = this.processPixel(R[i], G[i], B[i]);
-            Rout[i] = result[0];
-            Gout[i] = result[1];
-            Bout[i] = result[2];
-
-            if (this.clippingMode == 2) // Track max for rescale mode
+            for (var x = 0; x < width; x++)
             {
-               globalMax = Math.max(globalMax, result[0], result[1], result[2]);
+               var r = image.sample(x, y, 0);
+               var g = image.sample(x, y, 1);
+               var b = image.sample(x, y, 2);
+
+               var result = this.processPixel(r, g, b);
+
+               outputImage.setSample(result[0], x, y, 0);
+               outputImage.setSample(result[1], x, y, 1);
+               outputImage.setSample(result[2], x, y, 2);
+
+               if (this.clippingMode == 2)
+               {
+                  globalMax = Math.max(globalMax, result[0], result[1], result[2]);
+               }
+            }
+
+            // Progress indicator every 100 rows
+            if (y % 100 === 0)
+            {
+               Console.write(format("\rProcessing: %d%%", Math.round(100 * y / height)));
             }
          }
+         Console.writeln("\rProcessing: 100%");
 
-         // Apply rescale if needed
+         // Second pass for rescale mode if needed
          if (this.clippingMode == 2 && globalMax > 1.0)
          {
             Console.writeln(format("Rescaling by factor: %.4f", 1.0/globalMax));
-            for (var i = 0; i < Rout.length; i++)
+            for (var y = 0; y < height; y++)
             {
-               Rout[i] = Rout[i] / globalMax;
-               Gout[i] = Gout[i] / globalMax;
-               Bout[i] = Bout[i] / globalMax;
+               for (var x = 0; x < width; x++)
+               {
+                  outputImage.setSample(outputImage.sample(x, y, 0) / globalMax, x, y, 0);
+                  outputImage.setSample(outputImage.sample(x, y, 1) / globalMax, x, y, 1);
+                  outputImage.setSample(outputImage.sample(x, y, 2) / globalMax, x, y, 2);
+               }
             }
          }
 
-         // Write to output image
-         var outputImage = outputWindow.mainView.image;
-         outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
-         outputImage.setSamples(Rout, rect, 0);
-         outputImage.setSamples(Gout, rect, 1);
-         outputImage.setSamples(Bout, rect, 2);
          outputWindow.mainView.endProcess();
 
          var elapsed = (new Date().getTime() - startTime) / 1000;
@@ -897,26 +903,6 @@ function LuptonDialog(engine)
       this.dialog.schedulePreviewUpdate();
    };
 
-   this.zoomOutButton = new ToolButton(this);
-   this.zoomOutButton.text = "-";
-   this.zoomOutButton.setFixedWidth(24);
-   this.zoomOutButton.toolTip = "Zoom out";
-
-   this.zoomLabel = new Label(this);
-   this.zoomLabel.text = "Fit";
-   this.zoomLabel.textAlignment = TextAlign_Center;
-   this.zoomLabel.setFixedWidth(40);
-
-   this.zoomInButton = new ToolButton(this);
-   this.zoomInButton.text = "+";
-   this.zoomInButton.setFixedWidth(24);
-   this.zoomInButton.toolTip = "Zoom in";
-
-   this.fitButton = new PushButton(this);
-   this.fitButton.text = "Fit";
-   this.fitButton.setFixedWidth(30);
-   this.fitButton.toolTip = "Fit image to preview window";
-
    var previewToolbar = new HorizontalSizer;
    previewToolbar.spacing = 6;
    previewToolbar.add(this.realtimeCheckbox);
@@ -924,11 +910,6 @@ function LuptonDialog(engine)
    previewToolbar.add(this.beforeButton);
    previewToolbar.add(this.splitButton);
    previewToolbar.add(this.afterButton);
-   previewToolbar.addSpacing(10);
-   previewToolbar.add(this.zoomOutButton);
-   previewToolbar.add(this.zoomLabel);
-   previewToolbar.add(this.zoomInButton);
-   previewToolbar.add(this.fitButton);
 
    // Preview canvas
    this.previewControl = new PreviewControl(this, this.engine);
