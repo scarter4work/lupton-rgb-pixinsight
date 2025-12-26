@@ -942,7 +942,7 @@ function LuptonDialog(engine)
 
    this.splitSlider = new HorizontalSlider(this);
    this.splitSlider.setRange(10, 90);
-   this.splitSlider.setValue(50);
+   this.splitSlider.value = 50;
    this.splitSlider.toolTip = "Adjust split position";
    this.splitSlider.onValueUpdated = function(value)
    {
