@@ -292,34 +292,76 @@ function LuptonEngine()
    };
 
    // Generate preview bitmap
-   this.generatePreview = function(sourceWindow, previewWidth, previewHeight, showBefore, splitPos)
+   this.generatePreview = function(sourceWindow, previewWidth, previewHeight, showBefore, splitPos, zoomLevel, panX, panY)
    {
       if (!sourceWindow) return null;
 
       var image = sourceWindow.mainView.image;
       if (!image || image.numberOfChannels < 3) return null;
 
-      // Calculate scale factor
-      var scaleX = image.width / previewWidth;
-      var scaleY = image.height / previewHeight;
-      var scale = Math.max(scaleX, scaleY);
+      // Default zoom parameters
+      if (zoomLevel === undefined) zoomLevel = 0;
+      if (panX === undefined) panX = 0;
+      if (panY === undefined) panY = 0;
 
-      var actualWidth = Math.round(image.width / scale);
-      var actualHeight = Math.round(image.height / scale);
+      var imgWidth = image.width;
+      var imgHeight = image.height;
+
+      // Calculate scale based on zoom level
+      var scale;
+      var actualWidth, actualHeight;
+      var offsetX = 0, offsetY = 0;
+
+      if (zoomLevel === 0)
+      {
+         // Fit mode - scale to fit preview window
+         var scaleX = imgWidth / previewWidth;
+         var scaleY = imgHeight / previewHeight;
+         scale = Math.max(scaleX, scaleY);
+         actualWidth = Math.round(imgWidth / scale);
+         actualHeight = Math.round(imgHeight / scale);
+      }
+      else
+      {
+         // Zoom mode - use zoom factor
+         var zoomFactor = Math.pow(2, zoomLevel - 1); // level 1 = 100%, 2 = 200%, etc.
+         scale = 1.0 / zoomFactor;
+
+         // At 100% zoom, 1 image pixel = 1 preview pixel
+         actualWidth = Math.min(previewWidth, Math.round(imgWidth * zoomFactor));
+         actualHeight = Math.min(previewHeight, Math.round(imgHeight * zoomFactor));
+
+         // Calculate visible region with pan offset
+         offsetX = Math.max(0, Math.min(imgWidth - actualWidth / zoomFactor, panX));
+         offsetY = Math.max(0, Math.min(imgHeight - actualHeight / zoomFactor, panY));
+      }
 
       // Create bitmap
       var bitmap = new Bitmap(actualWidth, actualHeight);
 
-      // Sample step (process every nth pixel for speed)
-      var step = Math.max(1, Math.floor(scale));
-
       for (var py = 0; py < actualHeight; py++)
       {
-         var iy = Math.min(Math.floor(py * scale), image.height - 1);
+         var iy;
+         if (zoomLevel === 0)
+         {
+            iy = Math.min(Math.floor(py * scale), imgHeight - 1);
+         }
+         else
+         {
+            iy = Math.min(Math.floor(offsetY + py * scale), imgHeight - 1);
+         }
 
          for (var px = 0; px < actualWidth; px++)
          {
-            var ix = Math.min(Math.floor(px * scale), image.width - 1);
+            var ix;
+            if (zoomLevel === 0)
+            {
+               ix = Math.min(Math.floor(px * scale), imgWidth - 1);
+            }
+            else
+            {
+               ix = Math.min(Math.floor(offsetX + px * scale), imgWidth - 1);
+            }
 
             // Get source pixel
             var r = image.sample(ix, iy, 0);
@@ -399,9 +441,65 @@ function PreviewControl(parent, engine)
    this.splitPosition = 50;
    this.cursorX = 0;
    this.cursorY = 0;
-   this.showCrosshair = true;
+   this.showCrosshair = false;
+
+   // Zoom and pan state
+   this.zoomLevel = 0;  // 0 = fit, 1 = 100%, 2 = 200%, -1 = 50%, etc.
+   this.zoomFactor = 1.0;
+   this.panX = 0;
+   this.panY = 0;
+   this.dragging = false;
+   this.dragStartX = 0;
+   this.dragStartY = 0;
 
    this.setMinSize(320, 240);
+
+   // Calculate zoom factor from level
+   this.getZoomFactorFromLevel = function(level)
+   {
+      if (level === 0) return 1.0; // Fit mode uses dynamic scaling
+      return Math.pow(2, level - 1); // level 1 = 100%, 2 = 200%, -1 = 50%
+   };
+
+   // Zoom in
+   this.zoomIn = function()
+   {
+      if (this.zoomLevel < 4) // Max 800%
+      {
+         this.zoomLevel++;
+         this.zoomFactor = this.getZoomFactorFromLevel(this.zoomLevel);
+         this.updatePreview();
+      }
+   };
+
+   // Zoom out
+   this.zoomOut = function()
+   {
+      if (this.zoomLevel > -2) // Min 25%
+      {
+         this.zoomLevel--;
+         this.zoomFactor = this.getZoomFactorFromLevel(this.zoomLevel);
+         this.updatePreview();
+      }
+   };
+
+   // Fit to window
+   this.fitToWindow = function()
+   {
+      this.zoomLevel = 0;
+      this.zoomFactor = 1.0;
+      this.panX = 0;
+      this.panY = 0;
+      this.updatePreview();
+   };
+
+   // Get zoom label text
+   this.getZoomText = function()
+   {
+      if (this.zoomLevel === 0) return "Fit";
+      var pct = Math.round(this.getZoomFactorFromLevel(this.zoomLevel) * 100);
+      return pct + "%";
+   };
 
    // Update the preview
    this.updatePreview = function()
@@ -424,7 +522,10 @@ function PreviewControl(parent, engine)
          this.width,
          this.height,
          showBefore,
-         this.splitPosition
+         this.splitPosition,
+         this.zoomLevel,
+         this.panX,
+         this.panY
       );
 
       this.repaint();
@@ -903,6 +1004,42 @@ function LuptonDialog(engine)
       this.dialog.schedulePreviewUpdate();
    };
 
+   // Zoom controls
+   this.zoomOutButton = new ToolButton(this);
+   this.zoomOutButton.text = "-";
+   this.zoomOutButton.setFixedWidth(24);
+   this.zoomOutButton.toolTip = "Zoom out";
+   this.zoomOutButton.onClick = function()
+   {
+      this.dialog.previewControl.zoomOut();
+      this.dialog.updateZoomLabel();
+   };
+
+   this.zoomLabel = new Label(this);
+   this.zoomLabel.text = "Fit";
+   this.zoomLabel.textAlignment = TextAlign_Center;
+   this.zoomLabel.setFixedWidth(45);
+
+   this.zoomInButton = new ToolButton(this);
+   this.zoomInButton.text = "+";
+   this.zoomInButton.setFixedWidth(24);
+   this.zoomInButton.toolTip = "Zoom in";
+   this.zoomInButton.onClick = function()
+   {
+      this.dialog.previewControl.zoomIn();
+      this.dialog.updateZoomLabel();
+   };
+
+   this.fitButton = new PushButton(this);
+   this.fitButton.text = "Fit";
+   this.fitButton.setFixedWidth(35);
+   this.fitButton.toolTip = "Fit image to preview window";
+   this.fitButton.onClick = function()
+   {
+      this.dialog.previewControl.fitToWindow();
+      this.dialog.updateZoomLabel();
+   };
+
    var previewToolbar = new HorizontalSizer;
    previewToolbar.spacing = 6;
    previewToolbar.add(this.realtimeCheckbox);
@@ -910,6 +1047,11 @@ function LuptonDialog(engine)
    previewToolbar.add(this.beforeButton);
    previewToolbar.add(this.splitButton);
    previewToolbar.add(this.afterButton);
+   previewToolbar.addSpacing(10);
+   previewToolbar.add(this.zoomOutButton);
+   previewToolbar.add(this.zoomLabel);
+   previewToolbar.add(this.zoomInButton);
+   previewToolbar.add(this.fitButton);
 
    // Preview canvas
    this.previewControl = new PreviewControl(this, this.engine);
@@ -1000,6 +1142,11 @@ function LuptonDialog(engine)
       this.splitButton.text = (mode == 2) ? "[Split]" : "Split";
       this.afterButton.text = (mode == 0) ? "[After]" : "After";
       this.splitControl.visible = (mode == 2);
+   };
+
+   this.updateZoomLabel = function()
+   {
+      this.zoomLabel.text = this.previewControl.getZoomText();
    };
 
    this.updateTargetWindow = function()
