@@ -87,7 +87,8 @@ function LuptonEngine()
 
       // Step 2: Compute scale factor using arcsinh stretch
       var scale = 0;
-      if (I > minimum)
+      var epsilon = 1e-10;
+      if (I > minimum + epsilon)
       {
          var FI = this.F(I, this.stretch, this.Q, minimum);
          scale = FI / (I - minimum);
@@ -157,6 +158,9 @@ function LuptonEngine()
             }
          }
 
+         // Guard against empty samples
+         if (samples.length === 0) return 0;
+
          // Sort and find 1st percentile
          samples.sort(function(a, b) { return a - b; });
          var idx = Math.floor(samples.length * 0.01);
@@ -201,70 +205,84 @@ function LuptonEngine()
 
       // Create output window
       var outputId = targetWindow.mainView.id + "_lupton";
-      var outputWindow = new ImageWindow(
-         image.width,
-         image.height,
-         3,
-         32,  // 32-bit float
-         true, // float
-         true, // color
-         outputId
-      );
+      var outputWindow = null;
 
-      // Get source image data
-      var rect = new Rect(0, 0, image.width, image.height);
-      var R = new Vector(image.width * image.height);
-      var G = new Vector(image.width * image.height);
-      var B = new Vector(image.width * image.height);
-
-      image.getSamples(R, rect, 0);
-      image.getSamples(G, rect, 1);
-      image.getSamples(B, rect, 2);
-
-      // Process pixels
-      var globalMax = 0;
-      var Rout = new Vector(R.length);
-      var Gout = new Vector(G.length);
-      var Bout = new Vector(B.length);
-
-      for (var i = 0; i < R.length; i++)
+      try
       {
-         var result = this.processPixel(R.at(i), G.at(i), B.at(i));
-         Rout.set(i, result[0]);
-         Gout.set(i, result[1]);
-         Bout.set(i, result[2]);
+         outputWindow = new ImageWindow(
+            image.width,
+            image.height,
+            3,
+            32,  // 32-bit float
+            true, // float
+            true, // color
+            outputId
+         );
 
-         if (this.clippingMode == 2) // Track max for rescale mode
+         // Get source image data
+         var rect = new Rect(0, 0, image.width, image.height);
+         var R = new Vector(image.width * image.height);
+         var G = new Vector(image.width * image.height);
+         var B = new Vector(image.width * image.height);
+
+         image.getSamples(R, rect, 0);
+         image.getSamples(G, rect, 1);
+         image.getSamples(B, rect, 2);
+
+         // Process pixels
+         var globalMax = 0;
+         var Rout = new Vector(R.length);
+         var Gout = new Vector(G.length);
+         var Bout = new Vector(B.length);
+
+         for (var i = 0; i < R.length; i++)
          {
-            globalMax = Math.max(globalMax, result[0], result[1], result[2]);
-         }
-      }
+            var result = this.processPixel(R[i], G[i], B[i]);
+            Rout[i] = result[0];
+            Gout[i] = result[1];
+            Bout[i] = result[2];
 
-      // Apply rescale if needed
-      if (this.clippingMode == 2 && globalMax > 1.0)
+            if (this.clippingMode == 2) // Track max for rescale mode
+            {
+               globalMax = Math.max(globalMax, result[0], result[1], result[2]);
+            }
+         }
+
+         // Apply rescale if needed
+         if (this.clippingMode == 2 && globalMax > 1.0)
+         {
+            Console.writeln(format("Rescaling by factor: %.4f", 1.0/globalMax));
+            for (var i = 0; i < Rout.length; i++)
+            {
+               Rout[i] = Rout[i] / globalMax;
+               Gout[i] = Gout[i] / globalMax;
+               Bout[i] = Bout[i] / globalMax;
+            }
+         }
+
+         // Write to output image
+         var outputImage = outputWindow.mainView.image;
+         outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
+         outputImage.setSamples(Rout, rect, 0);
+         outputImage.setSamples(Gout, rect, 1);
+         outputImage.setSamples(Bout, rect, 2);
+         outputWindow.mainView.endProcess();
+
+         var elapsed = (new Date().getTime() - startTime) / 1000;
+         Console.writeln(format("Processing completed in %.2f seconds", elapsed));
+
+         outputWindow.show();
+         return outputWindow;
+      }
+      catch (e)
       {
-         Console.writeln(format("Rescaling by factor: %.4f", 1.0/globalMax));
-         for (var i = 0; i < Rout.length; i++)
+         Console.criticalln("Error during processing: " + e.message);
+         if (outputWindow)
          {
-            Rout.set(i, Rout.at(i) / globalMax);
-            Gout.set(i, Gout.at(i) / globalMax);
-            Bout.set(i, Bout.at(i) / globalMax);
+            outputWindow.forceClose();
          }
+         return null;
       }
-
-      // Write to output image
-      var outputImage = outputWindow.mainView.image;
-      outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
-      outputImage.setSamples(Rout, rect, 0);
-      outputImage.setSamples(Gout, rect, 1);
-      outputImage.setSamples(Bout, rect, 2);
-      outputWindow.mainView.endProcess();
-
-      var elapsed = (new Date().getTime() - startTime) / 1000;
-      Console.writeln(format("Processing completed in %.2f seconds", elapsed));
-
-      outputWindow.show();
-      return outputWindow;
    };
 
    // Generate preview bitmap
@@ -382,9 +400,14 @@ function PreviewControl(parent, engine)
    // Update the preview
    this.updatePreview = function()
    {
-      if (!this.sourceWindow)
+      // Clean up old bitmap to prevent memory leaks
+      if (this.bitmap)
       {
          this.bitmap = null;
+      }
+
+      if (!this.sourceWindow)
+      {
          this.repaint();
          return;
       }
@@ -1012,7 +1035,7 @@ function LuptonDialog(engine)
 
       this.previewControl.sourceWindow = this.targetWindow;
 
-      if (this.targetWindow)
+      if (this.targetWindow && this.targetWindow.mainView && this.targetWindow.mainView.image)
       {
          var img = this.targetWindow.mainView.image;
          this.imageSizeLabel.text = format("%d x %d px | 32-bit", img.width, img.height);
