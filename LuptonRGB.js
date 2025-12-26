@@ -613,7 +613,7 @@ function LuptonDialog(engine)
    this.stretchControl.label.setFixedWidth(80);
    this.stretchControl.setRange(0.1, 50.0);
    this.stretchControl.slider.setRange(0, 500);
-   this.stretchControl.slider.scaledMinWidth = 150;
+   this.stretchControl.slider.minWidth = 150;
    this.stretchControl.setPrecision(2);
    this.stretchControl.setValue(this.engine.stretch);
    this.stretchControl.toolTip = "Linear amplification factor. Higher = brighter image";
@@ -628,7 +628,7 @@ function LuptonDialog(engine)
    this.qControl.label.setFixedWidth(80);
    this.qControl.setRange(0.1, 30.0);
    this.qControl.slider.setRange(0, 300);
-   this.qControl.slider.scaledMinWidth = 150;
+   this.qControl.slider.minWidth = 150;
    this.qControl.setPrecision(2);
    this.qControl.setValue(this.engine.Q);
    this.qControl.toolTip = "Controls linear-to-logarithmic transition. Lower Q = earlier log behavior";
@@ -672,7 +672,7 @@ function LuptonDialog(engine)
    this.blackPointControl.label.setFixedWidth(80);
    this.blackPointControl.setRange(-0.1, 0.5);
    this.blackPointControl.slider.setRange(0, 600);
-   this.blackPointControl.slider.scaledMinWidth = 150;
+   this.blackPointControl.slider.minWidth = 150;
    this.blackPointControl.setPrecision(4);
    this.blackPointControl.setValue(this.engine.blackPoint);
    this.blackPointControl.toolTip = "Value subtracted before stretch";
@@ -687,7 +687,7 @@ function LuptonDialog(engine)
    this.blackRControl.label.setFixedWidth(80);
    this.blackRControl.setRange(-0.1, 0.5);
    this.blackRControl.slider.setRange(0, 600);
-   this.blackRControl.slider.scaledMinWidth = 150;
+   this.blackRControl.slider.minWidth = 150;
    this.blackRControl.setPrecision(4);
    this.blackRControl.setValue(this.engine.blackR);
    this.blackRControl.visible = false;
@@ -702,7 +702,7 @@ function LuptonDialog(engine)
    this.blackGControl.label.setFixedWidth(80);
    this.blackGControl.setRange(-0.1, 0.5);
    this.blackGControl.slider.setRange(0, 600);
-   this.blackGControl.slider.scaledMinWidth = 150;
+   this.blackGControl.slider.minWidth = 150;
    this.blackGControl.setPrecision(4);
    this.blackGControl.setValue(this.engine.blackG);
    this.blackGControl.visible = false;
@@ -717,7 +717,7 @@ function LuptonDialog(engine)
    this.blackBControl.label.setFixedWidth(80);
    this.blackBControl.setRange(-0.1, 0.5);
    this.blackBControl.slider.setRange(0, 600);
-   this.blackBControl.slider.scaledMinWidth = 150;
+   this.blackBControl.slider.minWidth = 150;
    this.blackBControl.setPrecision(4);
    this.blackBControl.setValue(this.engine.blackB);
    this.blackBControl.visible = false;
@@ -770,7 +770,7 @@ function LuptonDialog(engine)
    this.saturationControl.label.setFixedWidth(80);
    this.saturationControl.setRange(0.5, 2.0);
    this.saturationControl.slider.setRange(0, 150);
-   this.saturationControl.slider.scaledMinWidth = 150;
+   this.saturationControl.slider.minWidth = 150;
    this.saturationControl.setPrecision(2);
    this.saturationControl.setValue(this.engine.saturation);
    this.saturationControl.toolTip = "Post-stretch saturation adjustment";
