@@ -228,9 +228,7 @@ function LuptonEngine()
          outputWindow.mainView.image.apply(sourceImage);
          outputWindow.mainView.endProcess();
 
-         // Apply Lupton stretch using PixelMath
-         var P = new PixelMath;
-
+         // Apply Lupton stretch using PixelMath (two-pass for reliability)
          var alpha = this.stretch;
          var Q = this.Q;
 
@@ -249,57 +247,86 @@ function LuptonEngine()
          var intensity = "($T[0]+$T[1]+$T[2])/3";
          var epsilon = 1e-10;
 
-         // F(I) = asinh(alpha*Q*(I-min))/Q
-         // scale = F(I)/(I-min) when I > min, else 0
-         var FI = "ln(" + alpha + "*" + Q + "*(" + intensity + "-" + avgMin + ")+sqrt((" + alpha + "*" + Q + "*(" + intensity + "-" + avgMin + "))^2+1))/" + Q;
+         // Prevent Q from being too small (causes division issues)
+         var safeQ = Math.max(0.01, Q);
+
+         // F(I) = asinh(alpha*Q*(I-min))/Q using ln(x + sqrt(x^2+1))
+         var aQ = alpha * safeQ;
+         var arg = aQ + "*(" + intensity + "-" + avgMin + ")";
+         var FI = "ln(" + arg + "+sqrt(" + arg + "*" + arg + "+1))/" + safeQ;
          var scale = "iif(" + intensity + ">" + (avgMin + epsilon) + "," + FI + "/(" + intensity + "-" + avgMin + "),0)";
 
-         // Output for each channel: (in - min_channel) * scale, with saturation and clipping
-         // For simplicity, let's just apply the basic formula without saturation first
-         var exprR = "max(0,($T[0]-" + minR + ")*" + scale + ")";
-         var exprG = "max(0,($T[1]-" + minG + ")*" + scale + ")";
-         var exprB = "max(0,($T[2]-" + minB + ")*" + scale + ")";
+         // PASS 1: Apply Lupton stretch (no clipping yet)
+         var P1 = new PixelMath;
+         P1.expression = "max(0,($T[0]-" + minR + ")*" + scale + ")";
+         P1.expression1 = "max(0,($T[1]-" + minG + ")*" + scale + ")";
+         P1.expression2 = "max(0,($T[2]-" + minB + ")*" + scale + ")";
+         P1.useSingleExpression = false;
+         P1.createNewImage = false;
+         P1.rescale = false;
+         P1.truncate = false;  // Don't truncate yet - preserve values > 1
 
-         // Apply saturation if needed
+         Console.writeln("Pass 1: Applying Lupton stretch...");
+         P1.executeOn(outputWindow.mainView);
+
+         // PASS 2: Apply saturation adjustment if needed
          if (this.saturation != 1.0)
          {
             var sat = this.saturation;
-            // lum = (R'+G'+B')/3
-            // out = lum + (in - lum) * saturation
-            var lumExpr = "(" + exprR + "+" + exprG + "+" + exprB + ")/3";
-            exprR = lumExpr + "+(" + exprR + "-" + lumExpr + ")*" + sat;
-            exprG = lumExpr + "+(" + exprG + "-" + lumExpr + ")*" + sat;
-            exprB = lumExpr + "+(" + exprB + "-" + lumExpr + ")*" + sat;
+            var P2 = new PixelMath;
+            // lum = (R+G+B)/3, out = lum + (in - lum) * saturation
+            var lum = "($T[0]+$T[1]+$T[2])/3";
+            P2.expression = lum + "+($T[0]-" + lum + ")*" + sat;
+            P2.expression1 = lum + "+($T[1]-" + lum + ")*" + sat;
+            P2.expression2 = lum + "+($T[2]-" + lum + ")*" + sat;
+            P2.useSingleExpression = false;
+            P2.createNewImage = false;
+            P2.rescale = false;
+            P2.truncate = false;
+
+            Console.writeln("Pass 2: Applying saturation...");
+            P2.executeOn(outputWindow.mainView);
          }
 
-         // Apply clipping based on mode
+         // PASS 3: Apply clipping based on mode
+         var P3 = new PixelMath;
          if (this.clippingMode == 0)
          {
-            // Preserve Color: divide all by max if any > 1
-            var maxVal = "max(" + exprR + ",max(" + exprG + "," + exprB + "))";
-            var clipScale = "iif(" + maxVal + ">1,1/" + maxVal + ",1)";
-            exprR = "max(0," + exprR + "*" + clipScale + ")";
-            exprG = "max(0," + exprG + "*" + clipScale + ")";
-            exprB = "max(0," + exprB + "*" + clipScale + ")";
+            // Preserve Color: divide all channels by max(R,G,B) if any > 1
+            // This is the key Lupton feature - colors are preserved!
+            var maxRGB = "max($T[0],max($T[1],$T[2]))";
+            var clipScale = "iif(" + maxRGB + ">1,1/" + maxRGB + ",1)";
+            P3.expression = "max(0,$T[0]*" + clipScale + ")";
+            P3.expression1 = "max(0,$T[1]*" + clipScale + ")";
+            P3.expression2 = "max(0,$T[2]*" + clipScale + ")";
+            P3.rescale = false;
+            P3.truncate = true;
+            Console.writeln("Pass 3: Applying color-preserving clip...");
          }
          else if (this.clippingMode == 1)
          {
-            // Hard clip
-            exprR = "min(1,max(0," + exprR + "))";
-            exprG = "min(1,max(0," + exprG + "))";
-            exprB = "min(1,max(0," + exprB + "))";
+            // Hard clip each channel independently
+            P3.expression = "min(1,max(0,$T[0]))";
+            P3.expression1 = "min(1,max(0,$T[1]))";
+            P3.expression2 = "min(1,max(0,$T[2]))";
+            P3.rescale = false;
+            P3.truncate = true;
+            Console.writeln("Pass 3: Applying hard clip...");
          }
-         // Mode 2 (rescale) would need two passes
+         else
+         {
+            // Rescale mode - let PixelMath handle it
+            P3.expression = "$T[0]";
+            P3.expression1 = "$T[1]";
+            P3.expression2 = "$T[2]";
+            P3.rescale = true;
+            P3.truncate = true;
+            Console.writeln("Pass 3: Rescaling to fit...");
+         }
+         P3.useSingleExpression = false;
+         P3.createNewImage = false;
 
-         P.expression = exprR;
-         P.expression1 = exprG;
-         P.expression2 = exprB;
-         P.useSingleExpression = false;
-         P.createNewImage = false;
-         P.rescale = (this.clippingMode == 2); // Rescale mode
-         P.truncate = true;
-
-         P.executeOn(outputWindow.mainView);
+         P3.executeOn(outputWindow.mainView);
 
          var elapsed = (new Date().getTime() - startTime) / 1000;
          Console.writeln(format("Processing completed in %.2f seconds", elapsed));
@@ -731,8 +758,8 @@ function LuptonDialog(engine)
    this.stretchControl = new NumericControl(this);
    this.stretchControl.label.text = "Stretch (\u03B1):";
    this.stretchControl.label.setFixedWidth(80);
-   this.stretchControl.setRange(0.1, 50.0);
-   this.stretchControl.slider.setRange(0, 500);
+   this.stretchControl.setRange(0.1, 100.0);
+   this.stretchControl.slider.setRange(0, 1000);
    this.stretchControl.slider.minWidth = 150;
    this.stretchControl.setPrecision(2);
    this.stretchControl.setValue(this.engine.stretch);
@@ -746,8 +773,8 @@ function LuptonDialog(engine)
    this.qControl = new NumericControl(this);
    this.qControl.label.text = "Q (softening):";
    this.qControl.label.setFixedWidth(80);
-   this.qControl.setRange(0.1, 30.0);
-   this.qControl.slider.setRange(0, 300);
+   this.qControl.setRange(0.01, 30.0);
+   this.qControl.slider.setRange(0, 3000);
    this.qControl.slider.minWidth = 150;
    this.qControl.setPrecision(2);
    this.qControl.setValue(this.engine.Q);
