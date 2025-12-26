@@ -32,6 +32,15 @@
 #define TITLE   "Lupton RGB Stretch"
 
 // ============================================================================
+// Math.asinh polyfill for ECMA 262-5 compatibility
+// ============================================================================
+if (typeof Math.asinh === 'undefined') {
+   Math.asinh = function(x) {
+      return Math.log(x + Math.sqrt(x * x + 1));
+   };
+}
+
+// ============================================================================
 // Algorithm Engine
 // ============================================================================
 
@@ -369,7 +378,6 @@ function PreviewControl(parent, engine)
    this.showCrosshair = true;
 
    this.setMinSize(320, 240);
-   this.setScaledMinSize(320, 240);
 
    // Update the preview
    this.updatePreview = function()
@@ -398,67 +406,63 @@ function PreviewControl(parent, engine)
    {
       var g = new Graphics(this);
 
-      try
+      // Fill with black background
+      g.brush = new Brush(0xff000000);
+      g.fillRect(0, 0, this.width, this.height);
+
+      if (this.bitmap)
       {
-         // Fill with black background
-         g.fillRect(0, 0, this.width, this.height, new Brush(0xff000000));
+         // Center the bitmap
+         var bx = Math.round((this.width - this.bitmap.width) / 2);
+         var by = Math.round((this.height - this.bitmap.height) / 2);
 
-         if (this.bitmap)
+         g.drawBitmap(bx, by, this.bitmap);
+
+         // Draw split line if in split mode
+         if (this.previewMode == 2)
          {
-            // Center the bitmap
-            var bx = Math.round((this.width - this.bitmap.width) / 2);
-            var by = Math.round((this.height - this.bitmap.height) / 2);
+            var splitX = bx + Math.round(this.bitmap.width * this.splitPosition / 100);
+            g.pen = new Pen(0xaaffffff, 2);
+            g.drawLine(splitX, by, splitX, by + this.bitmap.height);
 
-            g.drawBitmap(bx, by, this.bitmap);
-
-            // Draw split line if in split mode
-            if (this.previewMode == 2)
-            {
-               var splitX = bx + Math.round(this.bitmap.width * this.splitPosition / 100);
-               g.pen = new Pen(0xaaffffff, 2);
-               g.drawLine(splitX, by, splitX, by + this.bitmap.height);
-
-               // Draw labels
-               g.pen = new Pen(0xffffffff);
-               g.font = new Font(FontFamily_Helvetica, 9);
-               g.drawText(bx + 5, by + 15, "BEFORE");
-               g.drawText(bx + this.bitmap.width - 45, by + 15, "AFTER");
-            }
-            else if (this.previewMode == 1)
-            {
-               g.pen = new Pen(0xffffffff);
-               g.font = new Font(FontFamily_Helvetica, 9);
-               g.drawText(5, 15, "BEFORE (Linear)");
-            }
-            else
-            {
-               g.pen = new Pen(0xffffffff);
-               g.font = new Font(FontFamily_Helvetica, 9);
-               g.drawText(5, 15, "AFTER (Lupton RGB)");
-            }
-
-            // Draw crosshair
-            if (this.showCrosshair)
-            {
-               var cx = this.width / 2;
-               var cy = this.height / 2;
-               g.pen = new Pen(0x8000ff00, 1);
-               g.drawLine(cx - 15, cy, cx + 15, cy);
-               g.drawLine(cx, cy - 15, cx, cy + 15);
-            }
+            // Draw labels
+            g.pen = new Pen(0xffffffff);
+            g.font = new Font(FontFamily_SansSerif, 9);
+            g.drawText(bx + 5, by + 15, "BEFORE");
+            g.drawText(bx + this.bitmap.width - 45, by + 15, "AFTER");
+         }
+         else if (this.previewMode == 1)
+         {
+            g.pen = new Pen(0xffffffff);
+            g.font = new Font(FontFamily_SansSerif, 9);
+            g.drawText(5, 15, "BEFORE (Linear)");
          }
          else
          {
-            // No image loaded message
-            g.pen = new Pen(0xff888888);
-            g.font = new Font(FontFamily_Helvetica, 11);
-            g.drawText(this.width/2 - 50, this.height/2, "No image loaded");
+            g.pen = new Pen(0xffffffff);
+            g.font = new Font(FontFamily_SansSerif, 9);
+            g.drawText(5, 15, "AFTER (Lupton RGB)");
+         }
+
+         // Draw crosshair
+         if (this.showCrosshair)
+         {
+            var cx = this.width / 2;
+            var cy = this.height / 2;
+            g.pen = new Pen(0x8000ff00, 1);
+            g.drawLine(cx - 15, cy, cx + 15, cy);
+            g.drawLine(cx, cy - 15, cx, cy + 15);
          }
       }
-      finally
+      else
       {
-         g.end();
+         // No image loaded message
+         g.pen = new Pen(0xff888888);
+         g.font = new Font(FontFamily_SansSerif, 11);
+         g.drawText(this.width/2 - 50, this.height/2, "No image loaded");
       }
+
+      g.end();
    };
 
    // Mouse tracking for cursor position
@@ -485,7 +489,8 @@ function LuptonDialog(engine)
    this.targetWindow = null;
 
    this.windowTitle = TITLE + " v" + VERSION;
-   this.setScaledMinSize(850, 550);
+   this.minWidth = 850;
+   this.minHeight = 550;
 
    // -------------------------------------------------------------------------
    // Left Panel - Controls
@@ -783,17 +788,6 @@ function LuptonDialog(engine)
    this.colorGroup.sizer.add(clippingSizer);
 
    // --- Action Buttons ---
-   this.newInstanceButton = new ToolButton(this);
-   this.newInstanceButton.icon = this.scaledResource(":/process-interface/new-instance.png");
-   this.newInstanceButton.setScaledFixedSize(24, 24);
-   this.newInstanceButton.toolTip = "New Instance";
-   this.newInstanceButton.onMousePress = function()
-   {
-      this.hasFocus = true;
-      this.pushed = false;
-      this.dialog.exportParameters();
-      this.dialog.newInstance();
-   };
 
    this.resetButton = new PushButton(this);
    this.resetButton.text = "Reset";
@@ -815,7 +809,6 @@ function LuptonDialog(engine)
 
    var actionSizer = new HorizontalSizer;
    actionSizer.spacing = 6;
-   actionSizer.add(this.newInstanceButton);
    actionSizer.addStretch();
    actionSizer.add(this.resetButton);
    actionSizer.add(this.applyButton);
@@ -926,7 +919,7 @@ function LuptonDialog(engine)
 
    this.splitSlider = new HorizontalSlider(this);
    this.splitSlider.setRange(10, 90);
-   this.splitSlider.value = 50;
+   this.splitSlider.setValue(50);
    this.splitSlider.toolTip = "Adjust split position";
    this.splitSlider.onValueUpdated = function(value)
    {
