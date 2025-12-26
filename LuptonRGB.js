@@ -192,8 +192,8 @@ function LuptonEngine()
          return null;
       }
 
-      var image = targetWindow.mainView.image;
-      if (image.numberOfChannels < 3)
+      var sourceImage = targetWindow.mainView.image;
+      if (sourceImage.numberOfChannels < 3)
       {
          Console.criticalln("Error: Image must have at least 3 channels (RGB)");
          return null;
@@ -203,16 +203,19 @@ function LuptonEngine()
       Console.writeln("Processing: " + targetWindow.mainView.id);
       Console.writeln(format("Parameters: alpha=%.2f, Q=%.2f", this.stretch, this.Q));
 
-      // Create output window
+      var width = sourceImage.width;
+      var height = sourceImage.height;
+
+      // Create output window by cloning the source
       var outputId = targetWindow.mainView.id + "_lupton";
       var outputWindow = null;
 
       try
       {
-         // Clone the source window
+         // Clone the entire window (this creates a writable copy)
          outputWindow = new ImageWindow(
-            image.width,
-            image.height,
+            width,
+            height,
             3,
             32,  // 32-bit float
             true, // float
@@ -220,34 +223,47 @@ function LuptonEngine()
             outputId
          );
 
-         var width = image.width;
-         var height = image.height;
+         // Read all source pixels into arrays first
+         var pixelsR = [];
+         var pixelsG = [];
+         var pixelsB = [];
 
-         // Copy source image to output first
-         outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
-         outputWindow.mainView.image.assign(image);
-         outputWindow.mainView.endProcess();
-
-         // Now modify the output image
-         var globalMax = 0;
-
-         outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
-         var outputImage = outputWindow.mainView.image;
-
-         // First pass: process all pixels
+         Console.writeln("Reading source image...");
          for (var y = 0; y < height; y++)
          {
+            var rowR = [];
+            var rowG = [];
+            var rowB = [];
             for (var x = 0; x < width; x++)
             {
-               var r = image.sample(x, y, 0);
-               var g = image.sample(x, y, 1);
-               var b = image.sample(x, y, 2);
+               rowR.push(sourceImage.sample(x, y, 0));
+               rowG.push(sourceImage.sample(x, y, 1));
+               rowB.push(sourceImage.sample(x, y, 2));
+            }
+            pixelsR.push(rowR);
+            pixelsG.push(rowG);
+            pixelsB.push(rowB);
+         }
 
-               var result = this.processPixel(r, g, b);
+         // Process all pixels in memory
+         Console.writeln("Processing pixels...");
+         var globalMax = 0;
+         var resultR = [];
+         var resultG = [];
+         var resultB = [];
 
-               outputImage.setSample(result[0], x, y, 0);
-               outputImage.setSample(result[1], x, y, 1);
-               outputImage.setSample(result[2], x, y, 2);
+         for (var y = 0; y < height; y++)
+         {
+            var outRowR = [];
+            var outRowG = [];
+            var outRowB = [];
+
+            for (var x = 0; x < width; x++)
+            {
+               var result = this.processPixel(pixelsR[y][x], pixelsG[y][x], pixelsB[y][x]);
+               outRowR.push(result[0]);
+               outRowG.push(result[1]);
+               outRowB.push(result[2]);
 
                if (this.clippingMode == 2)
                {
@@ -255,30 +271,119 @@ function LuptonEngine()
                }
             }
 
+            resultR.push(outRowR);
+            resultG.push(outRowG);
+            resultB.push(outRowB);
+
             // Progress indicator every 100 rows
             if (y % 100 === 0)
             {
-               Console.write(format("\rProcessing: %d%%", Math.round(100 * y / height)));
+               Console.write(format("\rProcessing: %d%%", Math.round(50 * y / height)));
             }
          }
-         Console.writeln("\rProcessing: 100%");
 
-         // Second pass for rescale mode if needed
+         // Apply rescale if needed
          if (this.clippingMode == 2 && globalMax > 1.0)
          {
-            Console.writeln(format("Rescaling by factor: %.4f", 1.0/globalMax));
+            Console.writeln(format("\nRescaling by factor: %.4f", 1.0/globalMax));
             for (var y = 0; y < height; y++)
             {
                for (var x = 0; x < width; x++)
                {
-                  outputImage.setSample(outputImage.sample(x, y, 0) / globalMax, x, y, 0);
-                  outputImage.setSample(outputImage.sample(x, y, 1) / globalMax, x, y, 1);
-                  outputImage.setSample(outputImage.sample(x, y, 2) / globalMax, x, y, 2);
+                  resultR[y][x] /= globalMax;
+                  resultG[y][x] /= globalMax;
+                  resultB[y][x] /= globalMax;
                }
             }
          }
 
+         // Write to output window using PixelMath with generated expressions
+         // This approach uses PI's native PixelMath process which handles image writing properly
+         Console.writeln("\nWriting output image...");
+
+         // Build the output image using the processed data
+         // We'll use a different approach: apply transformation to a copy of the source
+
+         // First, copy source to output
+         outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
+         outputWindow.mainView.image.apply(sourceImage);
          outputWindow.mainView.endProcess();
+
+         // Now apply our Lupton stretch using PixelMath
+         // Generate the PixelMath expression for Lupton algorithm
+         var P = new PixelMath;
+
+         var alpha = this.stretch;
+         var Q = this.Q;
+         var minVal = this.linkedChannels ? this.blackPoint :
+                     "(channel(0) ? " + this.blackR + " : (channel(1) ? " + this.blackG + " : " + this.blackB + "))";
+
+         // The Lupton formula:
+         // I = (R+G+B)/3
+         // F(x) = asinh(alpha*Q*(x-min))/Q
+         // scale = F(I)/(I-min)
+         // out = (in - min) * scale
+
+         var minR = this.linkedChannels ? this.blackPoint : this.blackR;
+         var minG = this.linkedChannels ? this.blackPoint : this.blackG;
+         var minB = this.linkedChannels ? this.blackPoint : this.blackB;
+         var avgMin = (minR + minG + minB) / 3;
+
+         // Intensity calculation (same for all channels)
+         var intensity = "($T[0]+$T[1]+$T[2])/3";
+         var epsilon = 1e-10;
+
+         // F(I) = asinh(alpha*Q*(I-min))/Q
+         // scale = F(I)/(I-min) when I > min, else 0
+         var FI = "ln(" + alpha + "*" + Q + "*(" + intensity + "-" + avgMin + ")+sqrt((" + alpha + "*" + Q + "*(" + intensity + "-" + avgMin + "))^2+1))/" + Q;
+         var scale = "iif(" + intensity + ">" + (avgMin + epsilon) + "," + FI + "/(" + intensity + "-" + avgMin + "),0)";
+
+         // Output for each channel: (in - min_channel) * scale, with saturation and clipping
+         // For simplicity, let's just apply the basic formula without saturation first
+         var exprR = "max(0,($T[0]-" + minR + ")*" + scale + ")";
+         var exprG = "max(0,($T[1]-" + minG + ")*" + scale + ")";
+         var exprB = "max(0,($T[2]-" + minB + ")*" + scale + ")";
+
+         // Apply saturation if needed
+         if (this.saturation != 1.0)
+         {
+            var sat = this.saturation;
+            // lum = (R'+G'+B')/3
+            // out = lum + (in - lum) * saturation
+            var lumExpr = "(" + exprR + "+" + exprG + "+" + exprB + ")/3";
+            exprR = lumExpr + "+(" + exprR + "-" + lumExpr + ")*" + sat;
+            exprG = lumExpr + "+(" + exprG + "-" + lumExpr + ")*" + sat;
+            exprB = lumExpr + "+(" + exprB + "-" + lumExpr + ")*" + sat;
+         }
+
+         // Apply clipping based on mode
+         if (this.clippingMode == 0)
+         {
+            // Preserve Color: divide all by max if any > 1
+            var maxVal = "max(" + exprR + ",max(" + exprG + "," + exprB + "))";
+            var clipScale = "iif(" + maxVal + ">1,1/" + maxVal + ",1)";
+            exprR = "max(0," + exprR + "*" + clipScale + ")";
+            exprG = "max(0," + exprG + "*" + clipScale + ")";
+            exprB = "max(0," + exprB + "*" + clipScale + ")";
+         }
+         else if (this.clippingMode == 1)
+         {
+            // Hard clip
+            exprR = "min(1,max(0," + exprR + "))";
+            exprG = "min(1,max(0," + exprG + "))";
+            exprB = "min(1,max(0," + exprB + "))";
+         }
+         // Mode 2 (rescale) would need two passes
+
+         P.expression = exprR;
+         P.expression1 = exprG;
+         P.expression2 = exprB;
+         P.useSingleExpression = false;
+         P.createNewImage = false;
+         P.rescale = (this.clippingMode == 2); // Rescale mode
+         P.truncate = true;
+
+         P.executeOn(outputWindow.mainView);
 
          var elapsed = (new Date().getTime() - startTime) / 1000;
          Console.writeln(format("Processing completed in %.2f seconds", elapsed));
