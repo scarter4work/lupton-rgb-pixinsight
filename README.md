@@ -14,6 +14,18 @@ A PixInsight script implementing the Lupton et al. (2004) RGB stretch algorithm 
 
 ## Installation
 
+### Option 1: Via PixInsight Repository Manager (Recommended)
+
+1. In PixInsight, go to **Resources > Updates > Manage Repositories**
+2. Click **Add** and enter this URL:
+   ```
+   https://raw.githubusercontent.com/scarter4work/lupton-rgb-pixinsight/main/repository/
+   ```
+3. Click **OK**, then go to **Resources > Updates > Check for Updates**
+4. Select "Lupton RGB Stretch" and click **Apply**
+
+### Option 2: Manual Installation
+
 1. Download `LuptonRGB.js`
 2. Copy to your PixInsight scripts folder:
    - Windows: `C:\Program Files\PixInsight\src\scripts\`
