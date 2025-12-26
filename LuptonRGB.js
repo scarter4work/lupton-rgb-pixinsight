@@ -1048,11 +1048,20 @@ function LuptonDialog(engine)
       this.dialog.apply();
    };
 
+   this.closeButton = new PushButton(this);
+   this.closeButton.text = "Close";
+   this.closeButton.toolTip = "Close dialog";
+   this.closeButton.onClick = function()
+   {
+      this.dialog.cancel();
+   };
+
    var actionSizer = new HorizontalSizer;
    actionSizer.spacing = 6;
    actionSizer.addStretch();
    actionSizer.add(this.resetButton);
    actionSizer.add(this.applyButton);
+   actionSizer.add(this.closeButton);
 
    // --- Left Panel Assembly ---
    this.leftPanel = new Control(this);
