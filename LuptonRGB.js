@@ -209,6 +209,7 @@ function LuptonEngine()
 
       try
       {
+         // Clone the source window
          outputWindow = new ImageWindow(
             image.width,
             image.height,
@@ -219,14 +220,19 @@ function LuptonEngine()
             outputId
          );
 
-         var outputImage = outputWindow.mainView.image;
-
-         // Process using direct pixel access
-         outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
-
-         var globalMax = 0;
          var width = image.width;
          var height = image.height;
+
+         // Copy source image to output first
+         outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
+         outputWindow.mainView.image.assign(image);
+         outputWindow.mainView.endProcess();
+
+         // Now modify the output image
+         var globalMax = 0;
+
+         outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
+         var outputImage = outputWindow.mainView.image;
 
          // First pass: process all pixels
          for (var y = 0; y < height; y++)

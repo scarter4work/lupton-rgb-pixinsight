@@ -10,7 +10,7 @@
    <platform os="all" arch="noarch" version="1.8.0:2.0.0">
 
       <package fileName="LuptonRGB_v1.0.0.zip"
-               sha1="eecbc80d0f2bc0aac61caeb40d48f9a976d67d9f"
+               sha1="e125d717aeb50165f5797db248e60d9598dc31f6"
                type="script"
                releaseDate="202412261800">
          <title>Lupton RGB Stretch</title>
