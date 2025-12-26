@@ -613,7 +613,6 @@ function LuptonDialog(engine)
    this.qHelpLabel = new Label(this);
    this.qHelpLabel.text = "Lower Q = earlier log transition";
    this.qHelpLabel.textAlignment = TextAlign_Left;
-   this.qHelpLabel.setStyleSheet("QLabel { color: #888888; font-size: 9px; margin-left: 85px; }");
 
    this.stretchGroup = new GroupBox(this);
    this.stretchGroup.title = "Stretch Parameters";
@@ -977,12 +976,10 @@ function LuptonDialog(engine)
    this.statusLabel = new Label(this);
    this.statusLabel.text = "Lupton RGB v" + VERSION + " | Based on Lupton et al. (2004) PASP 116:133";
    this.statusLabel.textAlignment = TextAlign_Left;
-   this.statusLabel.setStyleSheet("QLabel { color: #888888; }");
 
    this.timeLabel = new Label(this);
    this.timeLabel.text = "";
    this.timeLabel.textAlignment = TextAlign_Right;
-   this.timeLabel.setStyleSheet("QLabel { color: #888888; }");
 
    var statusSizer = new HorizontalSizer;
    statusSizer.margin = 4;
@@ -1001,9 +998,10 @@ function LuptonDialog(engine)
    this.updatePreviewModeButtons = function()
    {
       var mode = this.previewControl.previewMode;
-      this.beforeButton.setStyleSheet(mode == 1 ? "QPushButton { background-color: #4a90d9; }" : "");
-      this.splitButton.setStyleSheet(mode == 2 ? "QPushButton { background-color: #4a90d9; }" : "");
-      this.afterButton.setStyleSheet(mode == 0 ? "QPushButton { background-color: #4a90d9; }" : "");
+      // Update button text to show which is active
+      this.beforeButton.text = (mode == 1) ? "[Before]" : "Before";
+      this.splitButton.text = (mode == 2) ? "[Split]" : "Split";
+      this.afterButton.text = (mode == 0) ? "[After]" : "After";
       this.splitControl.visible = (mode == 2);
    };
 
