@@ -809,8 +809,8 @@ function LuptonDialog(engine)
    this.stretchControl = new NumericControl(this);
    this.stretchControl.label.text = "Stretch (\u03B1):";
    this.stretchControl.label.setFixedWidth(80);
-   this.stretchControl.setRange(0.1, 100.0);
-   this.stretchControl.slider.setRange(0, 1000);
+   this.stretchControl.setRange(0.1, 300.0);
+   this.stretchControl.slider.setRange(0, 3000);
    this.stretchControl.slider.minWidth = 150;
    this.stretchControl.setPrecision(2);
    this.stretchControl.setValue(this.engine.stretch);
@@ -868,8 +868,8 @@ function LuptonDialog(engine)
    this.blackPointControl = new NumericControl(this);
    this.blackPointControl.label.text = "Black Point:";
    this.blackPointControl.label.setFixedWidth(80);
-   this.blackPointControl.setRange(-0.1, 0.5);
-   this.blackPointControl.slider.setRange(0, 600);
+   this.blackPointControl.setRange(-0.1, 0.3);
+   this.blackPointControl.slider.setRange(0, 800);
    this.blackPointControl.slider.minWidth = 150;
    this.blackPointControl.setPrecision(4);
    this.blackPointControl.setValue(this.engine.blackPoint);
@@ -883,8 +883,8 @@ function LuptonDialog(engine)
    this.blackRControl = new NumericControl(this);
    this.blackRControl.label.text = "Black (R):";
    this.blackRControl.label.setFixedWidth(80);
-   this.blackRControl.setRange(-0.1, 0.5);
-   this.blackRControl.slider.setRange(0, 600);
+   this.blackRControl.setRange(-0.1, 0.3);
+   this.blackRControl.slider.setRange(0, 800);
    this.blackRControl.slider.minWidth = 150;
    this.blackRControl.setPrecision(4);
    this.blackRControl.setValue(this.engine.blackR);
@@ -898,8 +898,8 @@ function LuptonDialog(engine)
    this.blackGControl = new NumericControl(this);
    this.blackGControl.label.text = "Black (G):";
    this.blackGControl.label.setFixedWidth(80);
-   this.blackGControl.setRange(-0.1, 0.5);
-   this.blackGControl.slider.setRange(0, 600);
+   this.blackGControl.setRange(-0.1, 0.3);
+   this.blackGControl.slider.setRange(0, 800);
    this.blackGControl.slider.minWidth = 150;
    this.blackGControl.setPrecision(4);
    this.blackGControl.setValue(this.engine.blackG);
@@ -913,8 +913,8 @@ function LuptonDialog(engine)
    this.blackBControl = new NumericControl(this);
    this.blackBControl.label.text = "Black (B):";
    this.blackBControl.label.setFixedWidth(80);
-   this.blackBControl.setRange(-0.1, 0.5);
-   this.blackBControl.slider.setRange(0, 600);
+   this.blackBControl.setRange(-0.1, 0.3);
+   this.blackBControl.slider.setRange(0, 800);
    this.blackBControl.slider.minWidth = 150;
    this.blackBControl.setPrecision(4);
    this.blackBControl.setValue(this.engine.blackB);
