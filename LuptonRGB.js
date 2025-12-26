@@ -212,7 +212,7 @@ function LuptonEngine()
 
       try
       {
-         // Clone the entire window (this creates a writable copy)
+         // Create output window
          outputWindow = new ImageWindow(
             width,
             height,
@@ -223,100 +223,16 @@ function LuptonEngine()
             outputId
          );
 
-         // Read all source pixels into arrays first
-         var pixelsR = [];
-         var pixelsG = [];
-         var pixelsB = [];
-
-         Console.writeln("Reading source image...");
-         for (var y = 0; y < height; y++)
-         {
-            var rowR = [];
-            var rowG = [];
-            var rowB = [];
-            for (var x = 0; x < width; x++)
-            {
-               rowR.push(sourceImage.sample(x, y, 0));
-               rowG.push(sourceImage.sample(x, y, 1));
-               rowB.push(sourceImage.sample(x, y, 2));
-            }
-            pixelsR.push(rowR);
-            pixelsG.push(rowG);
-            pixelsB.push(rowB);
-         }
-
-         // Process all pixels in memory
-         Console.writeln("Processing pixels...");
-         var globalMax = 0;
-         var resultR = [];
-         var resultG = [];
-         var resultB = [];
-
-         for (var y = 0; y < height; y++)
-         {
-            var outRowR = [];
-            var outRowG = [];
-            var outRowB = [];
-
-            for (var x = 0; x < width; x++)
-            {
-               var result = this.processPixel(pixelsR[y][x], pixelsG[y][x], pixelsB[y][x]);
-               outRowR.push(result[0]);
-               outRowG.push(result[1]);
-               outRowB.push(result[2]);
-
-               if (this.clippingMode == 2)
-               {
-                  globalMax = Math.max(globalMax, result[0], result[1], result[2]);
-               }
-            }
-
-            resultR.push(outRowR);
-            resultG.push(outRowG);
-            resultB.push(outRowB);
-
-            // Progress indicator every 100 rows
-            if (y % 100 === 0)
-            {
-               Console.write(format("\rProcessing: %d%%", Math.round(50 * y / height)));
-            }
-         }
-
-         // Apply rescale if needed
-         if (this.clippingMode == 2 && globalMax > 1.0)
-         {
-            Console.writeln(format("\nRescaling by factor: %.4f", 1.0/globalMax));
-            for (var y = 0; y < height; y++)
-            {
-               for (var x = 0; x < width; x++)
-               {
-                  resultR[y][x] /= globalMax;
-                  resultG[y][x] /= globalMax;
-                  resultB[y][x] /= globalMax;
-               }
-            }
-         }
-
-         // Write to output window using PixelMath with generated expressions
-         // This approach uses PI's native PixelMath process which handles image writing properly
-         Console.writeln("\nWriting output image...");
-
-         // Build the output image using the processed data
-         // We'll use a different approach: apply transformation to a copy of the source
-
-         // First, copy source to output
+         // Copy source to output
          outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
          outputWindow.mainView.image.apply(sourceImage);
          outputWindow.mainView.endProcess();
 
-         // Now apply our Lupton stretch using PixelMath
-         // Generate the PixelMath expression for Lupton algorithm
+         // Apply Lupton stretch using PixelMath
          var P = new PixelMath;
 
          var alpha = this.stretch;
          var Q = this.Q;
-         var minVal = this.linkedChannels ? this.blackPoint :
-                     "(channel(0) ? " + this.blackR + " : (channel(1) ? " + this.blackG + " : " + this.blackB + "))";
 
          // The Lupton formula:
          // I = (R+G+B)/3
@@ -418,6 +334,10 @@ function LuptonEngine()
       var imgWidth = image.width;
       var imgHeight = image.height;
 
+      // Limit preview size for performance (max 400x300 for fast updates)
+      var maxPreviewW = Math.min(previewWidth, 400);
+      var maxPreviewH = Math.min(previewHeight, 300);
+
       // Calculate scale based on zoom level
       var scale;
       var actualWidth, actualHeight;
@@ -425,9 +345,9 @@ function LuptonEngine()
 
       if (zoomLevel === 0)
       {
-         // Fit mode - scale to fit preview window
-         var scaleX = imgWidth / previewWidth;
-         var scaleY = imgHeight / previewHeight;
+         // Fit mode - scale to fit preview window (use limited size)
+         var scaleX = imgWidth / maxPreviewW;
+         var scaleY = imgHeight / maxPreviewH;
          scale = Math.max(scaleX, scaleY);
          actualWidth = Math.round(imgWidth / scale);
          actualHeight = Math.round(imgHeight / scale);
@@ -438,9 +358,9 @@ function LuptonEngine()
          var zoomFactor = Math.pow(2, zoomLevel - 1); // level 1 = 100%, 2 = 200%, etc.
          scale = 1.0 / zoomFactor;
 
-         // At 100% zoom, 1 image pixel = 1 preview pixel
-         actualWidth = Math.min(previewWidth, Math.round(imgWidth * zoomFactor));
-         actualHeight = Math.min(previewHeight, Math.round(imgHeight * zoomFactor));
+         // At 100% zoom, 1 image pixel = 1 preview pixel (but limit to maxPreview size)
+         actualWidth = Math.min(maxPreviewW, Math.round(imgWidth * zoomFactor));
+         actualHeight = Math.min(maxPreviewH, Math.round(imgHeight * zoomFactor));
 
          // Calculate visible region with pan offset
          offsetX = Math.max(0, Math.min(imgWidth - actualWidth / zoomFactor, panX));
@@ -450,29 +370,20 @@ function LuptonEngine()
       // Create bitmap
       var bitmap = new Bitmap(actualWidth, actualHeight);
 
+      // Pre-calculate constants for the loop
+      var splitX = actualWidth * splitPos / 100;
+
       for (var py = 0; py < actualHeight; py++)
       {
-         var iy;
-         if (zoomLevel === 0)
-         {
-            iy = Math.min(Math.floor(py * scale), imgHeight - 1);
-         }
-         else
-         {
-            iy = Math.min(Math.floor(offsetY + py * scale), imgHeight - 1);
-         }
+         var iy = (zoomLevel === 0)
+            ? Math.min(Math.floor(py * scale), imgHeight - 1)
+            : Math.min(Math.floor(offsetY + py * scale), imgHeight - 1);
 
          for (var px = 0; px < actualWidth; px++)
          {
-            var ix;
-            if (zoomLevel === 0)
-            {
-               ix = Math.min(Math.floor(px * scale), imgWidth - 1);
-            }
-            else
-            {
-               ix = Math.min(Math.floor(offsetX + px * scale), imgWidth - 1);
-            }
+            var ix = (zoomLevel === 0)
+               ? Math.min(Math.floor(px * scale), imgWidth - 1)
+               : Math.min(Math.floor(offsetX + px * scale), imgWidth - 1);
 
             // Get source pixel
             var r = image.sample(ix, iy, 0);
@@ -482,21 +393,14 @@ function LuptonEngine()
             var rOut, gOut, bOut;
 
             // Determine if this pixel is in "before" or "after" region
-            var isBefore = false;
-            if (showBefore == 1) // Before only
-               isBefore = true;
-            else if (showBefore == 2) // Split mode
-               isBefore = (px < actualWidth * splitPos / 100);
-            // else showBefore == 0 means After only
+            var isBefore = (showBefore == 1) || (showBefore == 2 && px < splitX);
 
             if (isBefore)
             {
                // Show original (with basic STF-like stretch for visibility)
-               // Apply a simple auto-stretch for "before" view
-               var stretch = 10;
-               rOut = Math.min(1, r * stretch);
-               gOut = Math.min(1, g * stretch);
-               bOut = Math.min(1, b * stretch);
+               rOut = Math.min(1, r * 10);
+               gOut = Math.min(1, g * 10);
+               bOut = Math.min(1, b * 10);
             }
             else
             {
@@ -507,14 +411,12 @@ function LuptonEngine()
                bOut = result[2];
             }
 
-            // Convert to 8-bit
-            var r8 = Math.round(Math.min(255, Math.max(0, rOut * 255)));
-            var g8 = Math.round(Math.min(255, Math.max(0, gOut * 255)));
-            var b8 = Math.round(Math.min(255, Math.max(0, bOut * 255)));
+            // Convert to 8-bit and create color (combined for speed)
+            var r8 = (rOut > 1 ? 255 : (rOut < 0 ? 0 : (rOut * 255 + 0.5) | 0));
+            var g8 = (gOut > 1 ? 255 : (gOut < 0 ? 0 : (gOut * 255 + 0.5) | 0));
+            var b8 = (bOut > 1 ? 255 : (bOut < 0 ? 0 : (bOut * 255 + 0.5) | 0));
 
-            // PJSR uses 0xAARRGGBB format for colors
-            var color = 0xff000000 | (r8 << 16) | (g8 << 8) | b8;
-            bitmap.setPixel(px, py, color);
+            bitmap.setPixel(px, py, 0xff000000 | (r8 << 16) | (g8 << 8) | b8);
          }
       }
 
@@ -1296,16 +1198,35 @@ function LuptonDialog(engine)
       this.schedulePreviewUpdate();
    };
 
+   // Throttling state
+   this.lastPreviewTime = 0;
+   this.previewSkipCount = 0;
+
    this.schedulePreviewUpdate = function()
    {
       if (!this.realtimeCheckbox.checked)
          return;
 
-      // Direct preview update (PJSR doesn't have setTimeout)
-      var start = new Date().getTime();
+      // Throttle updates - skip if last update was less than 80ms ago
+      var now = new Date().getTime();
+      var elapsed = now - this.lastPreviewTime;
+
+      if (elapsed < 80)
+      {
+         // Skip this update but count it
+         this.previewSkipCount++;
+         // Only force update every 4th skip to keep preview somewhat responsive
+         if (this.previewSkipCount < 4)
+            return;
+      }
+
+      this.previewSkipCount = 0;
+      this.lastPreviewTime = now;
+
+      var start = now;
       this.previewControl.updatePreview();
-      var elapsed = (new Date().getTime() - start) / 1000;
-      this.timeLabel.text = format("Preview: %.2fs", elapsed);
+      var renderTime = (new Date().getTime() - start) / 1000;
+      this.timeLabel.text = format("Preview: %.2fs", renderTime);
    };
 
    this.calculateAutoBlackPoint = function()
