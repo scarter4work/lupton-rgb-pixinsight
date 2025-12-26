@@ -635,12 +635,63 @@ function PreviewControl(parent, engine)
       g.end();
    };
 
+   // Sampling mode for black point
+   this.samplingMode = false;
+   this.onSampleCallback = null;
+
    // Mouse tracking for cursor position
    this.onMouseMove = function(x, y, modifiers)
    {
       this.cursorX = x;
       this.cursorY = y;
       // The dialog will handle updating cursor info
+   };
+
+   // Mouse click for sampling
+   this.onMousePress = function(x, y, button, modifiers)
+   {
+      if (!this.samplingMode || !this.sourceWindow || !this.bitmap)
+         return;
+
+      // Calculate bitmap position (centered in control)
+      var bx = Math.round((this.width - this.bitmap.width) / 2);
+      var by = Math.round((this.height - this.bitmap.height) / 2);
+
+      // Check if click is within bitmap
+      var px = x - bx;
+      var py = y - by;
+      if (px < 0 || px >= this.bitmap.width || py < 0 || py >= this.bitmap.height)
+         return;
+
+      // Map preview coordinates to source image coordinates
+      var image = this.sourceWindow.mainView.image;
+      var imgWidth = image.width;
+      var imgHeight = image.height;
+
+      // Calculate scale (same logic as generatePreview)
+      var maxPreviewW = Math.min(this.width, 400);
+      var maxPreviewH = Math.min(this.height, 300);
+      var scaleX = imgWidth / maxPreviewW;
+      var scaleY = imgHeight / maxPreviewH;
+      var scale = Math.max(scaleX, scaleY);
+
+      var ix = Math.min(Math.floor(px * scale), imgWidth - 1);
+      var iy = Math.min(Math.floor(py * scale), imgHeight - 1);
+
+      // Sample the pixel values
+      var r = image.sample(ix, iy, 0);
+      var g = image.sample(ix, iy, 1);
+      var b = image.sample(ix, iy, 2);
+
+      // Call the callback with sampled values
+      if (this.onSampleCallback)
+      {
+         this.onSampleCallback(r, g, b);
+      }
+
+      // Exit sampling mode
+      this.samplingMode = false;
+      this.cursor = new Cursor(StdCursor_Arrow);
    };
 }
 
@@ -889,7 +940,10 @@ function LuptonDialog(engine)
    this.sampleBlackButton.toolTip = "Sample background from preview (click on dark area)";
    this.sampleBlackButton.onClick = function()
    {
-      Console.writeln("Click on a dark background area in the preview to sample black point.");
+      // Enable sampling mode on the preview
+      this.dialog.previewControl.samplingMode = true;
+      this.dialog.previewControl.cursor = new Cursor(StdCursor_Cross);
+      this.dialog.statusLabel.text = "Click on a dark background area in the preview...";
    };
 
    var blackButtonsSizer = new HorizontalSizer;
@@ -1062,6 +1116,7 @@ function LuptonDialog(engine)
    {
       this.dialog.previewControl.zoomOut();
       this.dialog.updateZoomLabel();
+      this.dialog.forcePreviewUpdate();
    };
 
    this.zoomLabel = new Label(this);
@@ -1077,6 +1132,7 @@ function LuptonDialog(engine)
    {
       this.dialog.previewControl.zoomIn();
       this.dialog.updateZoomLabel();
+      this.dialog.forcePreviewUpdate();
    };
 
    this.fitButton = new PushButton(this);
@@ -1087,6 +1143,7 @@ function LuptonDialog(engine)
    {
       this.dialog.previewControl.fitToWindow();
       this.dialog.updateZoomLabel();
+      this.dialog.forcePreviewUpdate();
    };
 
    var previewToolbar = new HorizontalSizer;
@@ -1105,6 +1162,32 @@ function LuptonDialog(engine)
    // Preview canvas
    this.previewControl = new PreviewControl(this, this.engine);
    this.previewControl.setMinSize(400, 300);
+
+   // Set up sampling callback
+   var dlg = this;
+   this.previewControl.onSampleCallback = function(r, g, b)
+   {
+      if (dlg.engine.linkedChannels)
+      {
+         // Use average as black point
+         var avg = (r + g + b) / 3;
+         dlg.engine.blackPoint = avg;
+         dlg.blackPointControl.setValue(avg);
+         Console.writeln(format("Sampled black point: %.6f", avg));
+      }
+      else
+      {
+         dlg.engine.blackR = r;
+         dlg.engine.blackG = g;
+         dlg.engine.blackB = b;
+         dlg.blackRControl.setValue(r);
+         dlg.blackGControl.setValue(g);
+         dlg.blackBControl.setValue(b);
+         Console.writeln(format("Sampled black point R: %.6f, G: %.6f, B: %.6f", r, g, b));
+      }
+      dlg.statusLabel.text = "Black point sampled from preview";
+      dlg.schedulePreviewUpdate();
+   };
 
    // Split position slider
    this.splitLabel = new Label(this);
@@ -1251,6 +1334,17 @@ function LuptonDialog(engine)
       this.lastPreviewTime = now;
 
       var start = now;
+      this.previewControl.updatePreview();
+      var renderTime = (new Date().getTime() - start) / 1000;
+      this.timeLabel.text = format("Preview: %.2fs", renderTime);
+   };
+
+   // Force preview update (bypasses throttling) - use for button clicks
+   this.forcePreviewUpdate = function()
+   {
+      this.lastPreviewTime = 0;  // Reset throttle
+      this.previewSkipCount = 0;
+      var start = new Date().getTime();
       this.previewControl.updatePreview();
       var renderTime = (new Date().getTime() - start) / 1000;
       this.timeLabel.text = format("Preview: %.2fs", renderTime);
