@@ -9,19 +9,20 @@
 
    <platform os="all" arch="noarch" version="1.8.0:2.0.0">
 
-      <package fileName="LuptonRGB_v1.0.5.zip"
-               sha1="e26c05f8665707919d4935ed4fe1dd4a13c9355e"
+      <package fileName="LuptonRGB_v1.0.6.zip"
+               sha1="2caf01d541190c96aaa7f2e8458b2fad29998fb7"
                type="script"
                releaseDate="20241227">
          <title>Lupton RGB Stretch</title>
          <description>
-            <p><b>Lupton RGB Stretch v1.0.5</b></p>
+            <p><b>Lupton RGB Stretch v1.0.6</b></p>
             <p>Implements the Lupton et al. (2004) RGB stretch algorithm for creating color-preserving stretched images from high dynamic range astronomical data.</p>
-            <p><b>Changes in v1.0.5:</b></p>
-            <p>- FIXED: Preview window now updates correctly using repaint() instead of update()</p>
-            <p>- FIXED: Fit button works properly</p>
-            <p>- FIXED: Enable preview checkbox triggers immediate update</p>
-            <p>- Added safety check for zero dimensions during initialization</p>
+            <p><b>Changes in v1.0.6:</b></p>
+            <p>- REWRITTEN: PreviewControl now uses official PixInsight PJSR pattern</p>
+            <p>- Uses Frame + ScrollBox + VectorGraphics (based on AdP PreviewControl)</p>
+            <p>- Proper viewport rendering with scrollbox.viewport.update()</p>
+            <p>- Fixed preview display, fit button, and zoom controls</p>
+            <p>- Added mouse wheel zoom and click-drag pan</p>
             <p><b>Features:</b></p>
             <p>- Arcsinh stretch with configurable alpha (up to 500) and Q parameters</p>
             <p>- Color-preserving clipping (prevents star color blowout)</p>

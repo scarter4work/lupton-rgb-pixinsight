@@ -34,7 +34,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.5"
+#define VERSION "1.0.6"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection
@@ -491,324 +491,369 @@ function LuptonEngine()
 }
 
 // ============================================================================
-// Preview Control - Custom rendering canvas
+// Preview Control - Based on official PixInsight PJSR pattern (AdP PreviewControl)
+// Uses Frame + ScrollBox + VectorGraphics for proper viewport rendering
 // ============================================================================
 
 function PreviewControl(parent, engine)
 {
-   this.__base__ = Control;
+   this.__base__ = Frame;
    this.__base__(parent);
 
    this.engine = engine;
    this.bitmap = null;
+   this.scaledImage = null;
    this.sourceWindow = null;
    this.previewMode = 0;  // 0: After, 1: Before, 2: Split
    this.splitPosition = 50;
-   this.cursorX = 0;
-   this.cursorY = 0;
    this.showCrosshair = false;
 
-   // Zoom and pan state
-   this.zoomLevel = 0;  // 0 = fit, 1 = 100%, 2 = 200%, -1 = 50%, etc.
+   // Zoom state
+   this.zoom = 0;  // 0 = fit, 1 = 100%, 2 = 200%, -1 = 50%, etc.
+   this.scale = 1.0;
+   this.zoomOutLimit = -5;
+
+   // For external compatibility
+   this.zoomLevel = 0;
    this.zoomFactor = 1.0;
    this.panX = 0;
    this.panY = 0;
-   this.dragging = false;
-   this.dragStartX = 0;
-   this.dragStartY = 0;
 
-   this.setMinSize(320, 240);
+   var self = this;
 
-   // Calculate zoom factor from level
-   this.getZoomFactorFromLevel = function(level)
+   // ScrollBox setup - this is the key to proper PJSR preview rendering
+   this.scrollbox = new ScrollBox(this);
+   this.scrollbox.autoScroll = true;
+   this.scrollbox.tracking = true;
+   this.scrollbox.cursor = new Cursor(StdCursor_Arrow);
+
+   this.scrollbox.onHorizontalScrollPosUpdated = function(newPos)
    {
-      if (level === 0) return 1.0; // Fit mode uses dynamic scaling
-      return Math.pow(2, level - 1); // level 1 = 100%, 2 = 200%, -1 = 50%
+      this.viewport.update();
+   };
+
+   this.scrollbox.onVerticalScrollPosUpdated = function(newPos)
+   {
+      this.viewport.update();
+   };
+
+   // Viewport paint handler - uses VectorGraphics per official pattern
+   this.scrollbox.viewport.onPaint = function(x0, y0, x1, y1)
+   {
+      var graphics = new VectorGraphics(this);
+
+      // Fill background
+      graphics.fillRect(x0, y0, x1, y1, new Brush(0xff202020));
+
+      if (self.scaledImage)
+      {
+         // Calculate offset to center image or handle scrolling
+         var offsetX = (this.parent.maxHorizontalScrollPosition > 0) ?
+            -this.parent.horizontalScrollPosition :
+            (this.width - self.scaledImage.width) / 2;
+         var offsetY = (this.parent.maxVerticalScrollPosition > 0) ?
+            -this.parent.verticalScrollPosition :
+            (this.height - self.scaledImage.height) / 2;
+
+         graphics.translateTransformation(offsetX, offsetY);
+
+         // Draw the preview image
+         graphics.drawBitmap(0, 0, self.scaledImage);
+
+         // Draw border
+         graphics.pen = new Pen(0xffffffff, 0);
+         graphics.drawRect(-1, -1, self.scaledImage.width + 1, self.scaledImage.height + 1);
+
+         // Draw split line if in split mode
+         if (self.previewMode === 2)
+         {
+            var splitX = Math.round(self.scaledImage.width * self.splitPosition / 100);
+            graphics.pen = new Pen(0xaaffffff, 2);
+            graphics.drawLine(splitX, 0, splitX, self.scaledImage.height);
+         }
+
+         // Draw mode labels
+         graphics.antialiasing = true;
+         graphics.pen = new Pen(0xffffffff);
+         if (self.previewMode === 2)
+         {
+            graphics.drawText(5, 15, "BEFORE");
+            graphics.drawText(self.scaledImage.width - 45, 15, "AFTER");
+         }
+         else if (self.previewMode === 1)
+         {
+            graphics.drawText(5, 15, "BEFORE (Linear)");
+         }
+         else
+         {
+            graphics.drawText(5, 15, "AFTER (Lupton RGB)");
+         }
+      }
+      else
+      {
+         // No image loaded
+         graphics.pen = new Pen(0xff888888);
+         graphics.drawText(this.width / 2 - 50, this.height / 2, "No image loaded");
+      }
+
+      graphics.end();
+   };
+
+   // Mouse tracking on viewport
+   this.scrollbox.viewport.onMouseMove = function(x, y, buttonState, modifiers)
+   {
+      if (self.scrolling)
+      {
+         self.scrollbox.horizontalScrollPosition = self.scrolling.orgScroll.x - (x - self.scrolling.orgCursor.x);
+         self.scrollbox.verticalScrollPosition = self.scrolling.orgScroll.y - (y - self.scrolling.orgCursor.y);
+      }
+
+      // Update cursor info callback
+      if (self.onCursorCallback && self.sourceWindow && self.scaledImage)
+      {
+         var ox = (this.parent.maxHorizontalScrollPosition > 0) ?
+            -this.parent.horizontalScrollPosition :
+            (this.width - self.scaledImage.width) / 2;
+         var oy = (this.parent.maxVerticalScrollPosition > 0) ?
+            -this.parent.verticalScrollPosition :
+            (this.height - self.scaledImage.height) / 2;
+
+         var px = (x - ox) / self.scale;
+         var py = (y - oy) / self.scale;
+
+         var image = self.sourceWindow.mainView.image;
+         if (px >= 0 && px < image.width && py >= 0 && py < image.height)
+         {
+            var ix = Math.floor(px);
+            var iy = Math.floor(py);
+            var r = image.sample(ix, iy, 0);
+            var g = image.sample(ix, iy, 1);
+            var b = image.sample(ix, iy, 2);
+            self.onCursorCallback(ix, iy, r, g, b);
+         }
+      }
+   };
+
+   // Mouse press for pan and sampling
+   this.scrollbox.viewport.onMousePress = function(x, y, button, buttonState, modifiers)
+   {
+      // Handle sampling mode
+      if (self.samplingMode && self.sourceWindow && self.scaledImage)
+      {
+         var ox = (this.parent.maxHorizontalScrollPosition > 0) ?
+            -this.parent.horizontalScrollPosition :
+            (this.width - self.scaledImage.width) / 2;
+         var oy = (this.parent.maxVerticalScrollPosition > 0) ?
+            -this.parent.verticalScrollPosition :
+            (this.height - self.scaledImage.height) / 2;
+
+         var px = (x - ox) / self.scale;
+         var py = (y - oy) / self.scale;
+
+         var image = self.sourceWindow.mainView.image;
+         if (px >= 0 && px < image.width && py >= 0 && py < image.height)
+         {
+            var ix = Math.floor(px);
+            var iy = Math.floor(py);
+            var r = image.sample(ix, iy, 0);
+            var g = image.sample(ix, iy, 1);
+            var b = image.sample(ix, iy, 2);
+
+            if (self.onSampleCallback)
+               self.onSampleCallback(r, g, b);
+         }
+
+         self.samplingMode = false;
+         this.cursor = new Cursor(StdCursor_Arrow);
+         return;
+      }
+
+      // Handle pan
+      if (self.scrolling || button != MouseButton_Left)
+         return;
+
+      self.scrolling = {
+         orgCursor: new Point(x, y),
+         orgScroll: new Point(self.scrollbox.horizontalScrollPosition, self.scrollbox.verticalScrollPosition)
+      };
+      this.cursor = new Cursor(StdCursor_ClosedHand);
+   };
+
+   this.scrollbox.viewport.onMouseRelease = function(x, y, button, buttonState, modifiers)
+   {
+      if (self.scrolling)
+      {
+         self.scrolling = null;
+         this.cursor = new Cursor(StdCursor_Arrow);
+      }
+   };
+
+   // Mouse wheel for zoom
+   this.scrollbox.viewport.onMouseWheel = function(x, y, delta, buttonState, modifiers)
+   {
+      self.UpdateZoom(self.zoom + (delta > 0 ? -1 : 1), new Point(x, y));
+   };
+
+   // Resize handler
+   this.scrollbox.viewport.onResize = function(wNew, hNew, wOld, hOld)
+   {
+      self.SetZoomOutLimit();
+      if (self.zoom < self.zoomOutLimit)
+         self.UpdateZoom(self.zoomOutLimit);
+      else
+         self.forceRedraw();
+   };
+
+   // Layout
+   this.sizer = new VerticalSizer;
+   this.sizer.add(this.scrollbox);
+
+   this.setScaledMinSize(320, 240);
+
+   // Sampling mode
+   this.samplingMode = false;
+   this.onSampleCallback = null;
+   this.onCursorCallback = null;
+   this.scrolling = null;
+
+   // Calculate zoom out limit based on viewport size
+   this.SetZoomOutLimit = function()
+   {
+      if (!this.sourceWindow) return;
+      var image = this.sourceWindow.mainView.image;
+      var scaleX = Math.ceil(image.width / this.scrollbox.viewport.width);
+      var scaleY = Math.ceil(image.height / this.scrollbox.viewport.height);
+      var scale = Math.max(scaleX, scaleY);
+      this.zoomOutLimit = Math.min(0, -scale + 2);
+   };
+
+   // Update zoom level
+   this.UpdateZoom = function(newZoom, refPoint)
+   {
+      newZoom = Math.max(this.zoomOutLimit, Math.min(2, newZoom));
+      if (newZoom == this.zoom && this.scaledImage)
+         return;
+
+      if (!refPoint)
+         refPoint = new Point(this.scrollbox.viewport.width / 2, this.scrollbox.viewport.height / 2);
+
+      var imgx = null;
+      if (this.scrollbox.maxHorizontalScrollPosition > 0)
+         imgx = (refPoint.x + this.scrollbox.horizontalScrollPosition) / this.scale;
+      var imgy = null;
+      if (this.scrollbox.maxVerticalScrollPosition > 0)
+         imgy = (refPoint.y + this.scrollbox.verticalScrollPosition) / this.scale;
+
+      this.zoom = newZoom;
+      this.zoomLevel = newZoom;  // For external compatibility
+
+      if (this.zoom > 0)
+         this.scale = this.zoom;
+      else
+         this.scale = 1 / (-this.zoom + 2);
+
+      this.zoomFactor = this.scale;  // For external compatibility
+
+      this.regenerateScaledImage();
+
+      if (this.scaledImage)
+      {
+         this.scrollbox.maxHorizontalScrollPosition = Math.max(0, this.scaledImage.width - this.scrollbox.viewport.width);
+         this.scrollbox.maxVerticalScrollPosition = Math.max(0, this.scaledImage.height - this.scrollbox.viewport.height);
+
+         if (this.scrollbox.maxHorizontalScrollPosition > 0 && imgx != null)
+            this.scrollbox.horizontalScrollPosition = (imgx * this.scale) - refPoint.x;
+         if (this.scrollbox.maxVerticalScrollPosition > 0 && imgy != null)
+            this.scrollbox.verticalScrollPosition = (imgy * this.scale) - refPoint.y;
+      }
+
+      this.scrollbox.viewport.update();
+   };
+
+   // Regenerate the scaled preview image
+   this.regenerateScaledImage = function()
+   {
+      this.scaledImage = null;
+      if (!this.sourceWindow) return;
+
+      var showBefore = this.previewMode;
+      this.bitmap = this.engine.generatePreview(
+         this.sourceWindow,
+         this.sourceWindow.mainView.image.width,
+         this.sourceWindow.mainView.image.height,
+         showBefore,
+         this.splitPosition,
+         0, 0, 0  // Always generate at full resolution
+      );
+
+      if (this.bitmap)
+      {
+         if (this.scale === 1)
+            this.scaledImage = this.bitmap;
+         else
+            this.scaledImage = this.bitmap.scaled(this.scale);
+      }
+   };
+
+   // Force redraw - official PJSR pattern
+   this.forceRedraw = function()
+   {
+      this.scrollbox.viewport.update();
+   };
+
+   // Update the preview (regenerate and redraw)
+   this.updatePreview = function()
+   {
+      if (!this.sourceWindow)
+      {
+         this.scaledImage = null;
+         this.forceRedraw();
+         return;
+      }
+
+      if (this.scrollbox.viewport.width <= 0 || this.scrollbox.viewport.height <= 0)
+         return;
+
+      this.SetZoomOutLimit();
+      this.regenerateScaledImage();
+
+      if (this.scaledImage)
+      {
+         this.scrollbox.maxHorizontalScrollPosition = Math.max(0, this.scaledImage.width - this.scrollbox.viewport.width);
+         this.scrollbox.maxVerticalScrollPosition = Math.max(0, this.scaledImage.height - this.scrollbox.viewport.height);
+      }
+
+      this.forceRedraw();
    };
 
    // Zoom in
    this.zoomIn = function()
    {
-      if (this.zoomLevel < 4) // Max 800%
-      {
-         this.zoomLevel++;
-         this.zoomFactor = this.getZoomFactorFromLevel(this.zoomLevel);
-         this.updatePreview();
-      }
+      this.UpdateZoom(this.zoom + 1);
    };
 
    // Zoom out
    this.zoomOut = function()
    {
-      if (this.zoomLevel > -2) // Min 25%
-      {
-         this.zoomLevel--;
-         this.zoomFactor = this.getZoomFactorFromLevel(this.zoomLevel);
-         this.updatePreview();
-      }
+      this.UpdateZoom(this.zoom - 1);
    };
 
    // Fit to window
    this.fitToWindow = function()
    {
-      this.zoomLevel = 0;
-      this.zoomFactor = 1.0;
-      this.panX = 0;
-      this.panY = 0;
-      this.updatePreview();
+      this.UpdateZoom(this.zoomOutLimit);
    };
 
    // Get zoom label text
    this.getZoomText = function()
    {
-      if (this.zoomLevel === 0) return "Fit";
-      var pct = Math.round(this.getZoomFactorFromLevel(this.zoomLevel) * 100);
-      return pct + "%";
-   };
-
-   // Force redraw - use repaint() for immediate redraw in PJSR
-   this.forceRedraw = function()
-   {
-      this.repaint();
-   };
-
-   // Update the preview
-   this.updatePreview = function()
-   {
-      // Clean up old bitmap to prevent memory leaks
-      if (this.bitmap)
-      {
-         this.bitmap = null;
-      }
-
-      if (!this.sourceWindow)
-      {
-         this.forceRedraw();
-         return;
-      }
-
-      // Don't generate preview if control has no valid dimensions yet
-      if (this.width <= 0 || this.height <= 0)
-      {
-         return;
-      }
-
-      var showBefore = this.previewMode; // 0: After, 1: Before, 2: Split
-      this.bitmap = this.engine.generatePreview(
-         this.sourceWindow,
-         this.width,
-         this.height,
-         showBefore,
-         this.splitPosition,
-         this.zoomLevel,
-         this.panX,
-         this.panY
-      );
-
-      this.forceRedraw();
-   };
-
-   // Paint event handler
-   this.onPaint = function(x0, y0, x1, y1)
-   {
-      var g = new Graphics(this);
-
-      // Fill with black background
-      g.brush = new Brush(0xff000000);
-      g.fillRect(0, 0, this.width, this.height);
-
-      if (this.bitmap)
-      {
-         // Center the bitmap
-         var bx = Math.round((this.width - this.bitmap.width) / 2);
-         var by = Math.round((this.height - this.bitmap.height) / 2);
-
-         g.drawBitmap(bx, by, this.bitmap);
-
-         // Draw split line if in split mode
-         if (this.previewMode === 2)
-         {
-            var splitX = bx + Math.round(this.bitmap.width * this.splitPosition / 100);
-            g.pen = new Pen(0xaaffffff, 2);
-            g.drawLine(splitX, by, splitX, by + this.bitmap.height);
-
-            // Draw labels
-            g.pen = new Pen(0xffffffff);
-            g.font = new Font(FontFamily_SansSerif, 9);
-            g.drawText(bx + 5, by + 15, "BEFORE");
-            g.drawText(bx + this.bitmap.width - 45, by + 15, "AFTER");
-         }
-         else if (this.previewMode === 1)
-         {
-            g.pen = new Pen(0xffffffff);
-            g.font = new Font(FontFamily_SansSerif, 9);
-            g.drawText(5, 15, "BEFORE (Linear)");
-         }
-         else
-         {
-            g.pen = new Pen(0xffffffff);
-            g.font = new Font(FontFamily_SansSerif, 9);
-            g.drawText(5, 15, "AFTER (Lupton RGB)");
-         }
-
-         // Draw crosshair
-         if (this.showCrosshair)
-         {
-            var cx = this.width / 2;
-            var cy = this.height / 2;
-            g.pen = new Pen(0x8000ff00, 1);
-            g.drawLine(cx - 15, cy, cx + 15, cy);
-            g.drawLine(cx, cy - 15, cx, cy + 15);
-         }
-      }
-      else
-      {
-         // No image loaded message
-         g.pen = new Pen(0xff888888);
-         g.font = new Font(FontFamily_SansSerif, 11);
-         g.drawText(this.width/2 - 50, this.height/2, "No image loaded");
-      }
-
-      g.end();
-   };
-
-   // Sampling mode for black point
-   this.samplingMode = false;
-   this.onSampleCallback = null;
-
-   // Mouse tracking for cursor position
-   this.onMouseMove = function(x, y, modifiers)
-   {
-      this.cursorX = x;
-      this.cursorY = y;
-
-      // Update cursor info if callback is set
-      if (this.onCursorCallback && this.sourceWindow && this.bitmap)
-      {
-         // Calculate bitmap position (centered in control)
-         var bx = Math.round((this.width - this.bitmap.width) / 2);
-         var by = Math.round((this.height - this.bitmap.height) / 2);
-
-         // Check if cursor is within bitmap
-         var px = x - bx;
-         var py = y - by;
-         if (px >= 0 && px < this.bitmap.width && py >= 0 && py < this.bitmap.height)
-         {
-            // Map preview coords to image coords (same logic as generatePreview)
-            var image = this.sourceWindow.mainView.image;
-            var imgWidth = image.width;
-            var imgHeight = image.height;
-
-            var maxPreviewW = Math.min(this.width, 800);
-            var maxPreviewH = Math.min(this.height, 600);
-
-            var ix, iy;
-            if (this.zoomLevel === 0)
-            {
-               // Fit mode - calculate scale to fit
-               var scaleX = imgWidth / maxPreviewW;
-               var scaleY = imgHeight / maxPreviewH;
-               var scale = Math.max(scaleX, scaleY);
-               ix = Math.min(Math.floor(px * scale), imgWidth - 1);
-               iy = Math.min(Math.floor(py * scale), imgHeight - 1);
-            }
-            else
-            {
-               // Zoom mode - account for zoom factor and pan offset
-               var zoomFactor = Math.pow(2, this.zoomLevel - 1);
-               var scale = 1.0 / zoomFactor;
-               var offsetX = Math.max(0, Math.min(imgWidth - this.bitmap.width / zoomFactor, this.panX));
-               var offsetY = Math.max(0, Math.min(imgHeight - this.bitmap.height / zoomFactor, this.panY));
-               ix = Math.min(Math.floor(offsetX + px * scale), imgWidth - 1);
-               iy = Math.min(Math.floor(offsetY + py * scale), imgHeight - 1);
-            }
-
-            // Sample pixel values
-            var r = image.sample(ix, iy, 0);
-            var g = image.sample(ix, iy, 1);
-            var b = image.sample(ix, iy, 2);
-
-            this.onCursorCallback(ix, iy, r, g, b);
-         }
-      }
-   };
-
-   // Callback for cursor info updates
-   this.onCursorCallback = null;
-
-   // Mouse click for sampling
-   this.onMousePress = function(x, y, button, modifiers)
-   {
-      if (!this.samplingMode || !this.sourceWindow || !this.bitmap)
-         return;
-
-      // Calculate bitmap position (centered in control)
-      var bx = Math.round((this.width - this.bitmap.width) / 2);
-      var by = Math.round((this.height - this.bitmap.height) / 2);
-
-      // Check if click is within bitmap
-      var px = x - bx;
-      var py = y - by;
-      if (px < 0 || px >= this.bitmap.width || py < 0 || py >= this.bitmap.height)
-         return;
-
-      // Map preview coordinates to source image coordinates
-      var image = this.sourceWindow.mainView.image;
-      var imgWidth = image.width;
-      var imgHeight = image.height;
-
-      // Calculate scale (same logic as generatePreview, accounting for zoom)
-      var maxPreviewW = Math.min(this.width, 800);
-      var maxPreviewH = Math.min(this.height, 600);
-
-      var ix, iy;
-      if (this.zoomLevel === 0)
-      {
-         // Fit mode - calculate scale to fit
-         var scaleX = imgWidth / maxPreviewW;
-         var scaleY = imgHeight / maxPreviewH;
-         var scale = Math.max(scaleX, scaleY);
-         ix = Math.min(Math.floor(px * scale), imgWidth - 1);
-         iy = Math.min(Math.floor(py * scale), imgHeight - 1);
-      }
-      else
-      {
-         // Zoom mode - account for zoom factor and pan offset
-         var zoomFactor = Math.pow(2, this.zoomLevel - 1);
-         var scale = 1.0 / zoomFactor;
-         var offsetX = Math.max(0, Math.min(imgWidth - this.bitmap.width / zoomFactor, this.panX));
-         var offsetY = Math.max(0, Math.min(imgHeight - this.bitmap.height / zoomFactor, this.panY));
-         ix = Math.min(Math.floor(offsetX + px * scale), imgWidth - 1);
-         iy = Math.min(Math.floor(offsetY + py * scale), imgHeight - 1);
-      }
-
-      // Sample the pixel values
-      var r = image.sample(ix, iy, 0);
-      var g = image.sample(ix, iy, 1);
-      var b = image.sample(ix, iy, 2);
-
-      // Call the callback with sampled values
-      if (this.onSampleCallback)
-      {
-         this.onSampleCallback(r, g, b);
-      }
-
-      // Exit sampling mode
-      this.samplingMode = false;
-      this.cursor = new Cursor(StdCursor_Arrow);
-   };
-
-   // Handle resize - regenerate preview at new size
-   this.onResize = function(wNew, hNew, wOld, hOld)
-   {
-      if (wNew != wOld || hNew != hOld)
-      {
-         this.updatePreview();
-      }
+      if (this.zoom === 0) return "Fit";
+      if (this.zoom > 0) return this.zoom + ":1";
+      return "1:" + (-this.zoom + 2);
    };
 }
 
-PreviewControl.prototype = new Control;
+PreviewControl.prototype = new Frame;
 
 // ============================================================================
 // Main Dialog
