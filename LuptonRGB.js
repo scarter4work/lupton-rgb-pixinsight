@@ -34,7 +34,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.10"
+#define VERSION "1.0.11"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection
@@ -963,6 +963,32 @@ function LuptonDialog(engine)
    // -------------------------------------------------------------------------
 
    // --- Input Images Group ---
+   this.targetImageLabel = new Label(this);
+   this.targetImageLabel.text = "Target:";
+   this.targetImageLabel.textAlignment = TextAlign_Right | TextAlign_VertCenter;
+   this.targetImageLabel.setFixedWidth(45);
+
+   this.targetImageCombo = new ComboBox(this);
+   this.targetImageCombo.toolTip = "Select target RGB image to process";
+   this.targetImageCombo.onItemSelected = function(index)
+   {
+      if (index > 0)
+      {
+         var windows = ImageWindow.windows;
+         if (index - 1 < windows.length)
+         {
+            this.dialog.targetWindow = windows[index - 1];
+            this.dialog.previewControl.sourceWindow = this.dialog.targetWindow;
+            this.dialog.updateTargetWindow();
+         }
+      }
+   };
+
+   var targetSizer = new HorizontalSizer;
+   targetSizer.spacing = 4;
+   targetSizer.add(this.targetImageLabel);
+   targetSizer.add(this.targetImageCombo, 100);
+
    this.useActiveCheckbox = new CheckBox(this);
    this.useActiveCheckbox.text = "Use active RGB image";
    this.useActiveCheckbox.checked = this.engine.useActiveImage;
@@ -970,6 +996,7 @@ function LuptonDialog(engine)
    this.useActiveCheckbox.onCheck = function(checked)
    {
       this.dialog.engine.useActiveImage = checked;
+      this.dialog.targetImageCombo.enabled = !checked;
       this.dialog.imageRCombo.enabled = !checked;
       this.dialog.imageGCombo.enabled = !checked;
       this.dialog.imageBCombo.enabled = !checked;
@@ -1008,10 +1035,12 @@ function LuptonDialog(engine)
    this.populateImageLists = function()
    {
       var windows = ImageWindow.windows;
+      this.targetImageCombo.clear();
       this.imageRCombo.clear();
       this.imageGCombo.clear();
       this.imageBCombo.clear();
 
+      this.targetImageCombo.addItem("<select>");
       this.imageRCombo.addItem("<select>");
       this.imageGCombo.addItem("<select>");
       this.imageBCombo.addItem("<select>");
@@ -1019,9 +1048,23 @@ function LuptonDialog(engine)
       for (var i = 0; i < windows.length; i++)
       {
          var id = windows[i].mainView.id;
+         this.targetImageCombo.addItem(id);
          this.imageRCombo.addItem(id);
          this.imageGCombo.addItem(id);
          this.imageBCombo.addItem(id);
+      }
+
+      // Select current target window in combo if available
+      if (this.targetWindow)
+      {
+         for (var i = 0; i < windows.length; i++)
+         {
+            if (windows[i].mainView.id === this.targetWindow.mainView.id)
+            {
+               this.targetImageCombo.currentItem = i + 1;
+               break;
+            }
+         }
       }
    };
 
@@ -1040,11 +1083,15 @@ function LuptonDialog(engine)
    bSizer.add(this.imageBLabel);
    bSizer.add(this.imageBCombo, 100);
 
+   // Set initial enabled state for target combo
+   this.targetImageCombo.enabled = !this.engine.useActiveImage;
+
    this.inputGroup = new GroupBox(this);
    this.inputGroup.title = "Input Images";
    this.inputGroup.sizer = new VerticalSizer;
    this.inputGroup.sizer.margin = 6;
    this.inputGroup.sizer.spacing = 4;
+   this.inputGroup.sizer.add(targetSizer);
    this.inputGroup.sizer.add(this.useActiveCheckbox);
    this.inputGroup.sizer.add(rSizer);
    this.inputGroup.sizer.add(gSizer);
@@ -1271,8 +1318,8 @@ function LuptonDialog(engine)
    };
 
    this.applyButton = new PushButton(this);
-   this.applyButton.text = "Apply";
-   this.applyButton.toolTip = "Apply Lupton RGB stretch to create new image";
+   this.applyButton.text = "Execute";
+   this.applyButton.toolTip = "Execute Lupton RGB stretch to create new image";
    this.applyButton.onClick = function()
    {
       this.dialog.apply();
