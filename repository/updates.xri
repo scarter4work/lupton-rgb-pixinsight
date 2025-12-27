@@ -9,17 +9,16 @@
 
    <platform os="all" arch="noarch" version="1.8.0:2.0.0">
 
-      <package fileName="LuptonRGB_v1.0.11.zip"
-               sha1="53418f021eadbefa13f05c3d53ebfce6f544058e"
+      <package fileName="LuptonRGB_v1.0.12.zip"
+               sha1="5d5681c39fdc2d1f7ed4a7197ae7b3aa094cdca5"
                type="script"
                releaseDate="20241227">
          <title>Lupton RGB Stretch</title>
          <description>
-            <p><b>Lupton RGB Stretch v1.0.11</b></p>
+            <p><b>Lupton RGB Stretch v1.0.12</b></p>
             <p>Implements the Lupton et al. (2004) RGB stretch algorithm for creating color-preserving stretched images from high dynamic range astronomical data.</p>
-            <p><b>Changes in v1.0.11:</b></p>
-            <p>- Renamed "Apply" button to "Execute"</p>
-            <p>- Added target image dropdown for processing multiple images in one session</p>
+            <p><b>Changes in v1.0.12:</b></p>
+            <p>- Fixed: Target image dropdown now properly changes the loaded image</p>
             <p><b>Features:</b></p>
             <p>- Arcsinh stretch with configurable alpha (up to 1000) and Q parameters</p>
             <p>- Color-preserving clipping (prevents star color blowout)</p>

@@ -34,7 +34,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.11"
+#define VERSION "1.0.12"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection
@@ -1599,11 +1599,7 @@ function LuptonDialog(engine)
       {
          this.targetWindow = ImageWindow.activeWindow;
       }
-      else
-      {
-         // For now, use active window (separate channel handling would need more work)
-         this.targetWindow = ImageWindow.activeWindow;
-      }
+      // else: keep the targetWindow that was set by the dropdown
 
       this.previewControl.sourceWindow = this.targetWindow;
 
