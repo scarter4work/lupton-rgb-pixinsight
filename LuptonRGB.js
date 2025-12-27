@@ -22,6 +22,7 @@
 #include <pjsr/TextAlign.jsh>
 #include <pjsr/StdButton.jsh>
 #include <pjsr/StdIcon.jsh>
+#include <pjsr/StdCursor.jsh>
 #include <pjsr/NumericControl.jsh>
 #include <pjsr/UndoFlag.jsh>
 #include <pjsr/SampleType.jsh>
@@ -906,8 +907,8 @@ function LuptonDialog(engine)
    this.stretchControl = new NumericControl(this);
    this.stretchControl.label.text = "Stretch (\u03B1):";
    this.stretchControl.label.setFixedWidth(80);
-   this.stretchControl.setRange(0.1, 300.0);
-   this.stretchControl.slider.setRange(0, 3000);
+   this.stretchControl.setRange(0.1, 500.0);
+   this.stretchControl.slider.setRange(0, 5000);
    this.stretchControl.slider.minWidth = 150;
    this.stretchControl.setPrecision(2);
    this.stretchControl.setValue(this.engine.stretch);
@@ -962,63 +963,65 @@ function LuptonDialog(engine)
       this.dialog.schedulePreviewUpdate();
    };
 
+   // Black point scale: 0-100 displayed, actual = displayed / 10000
+   // So 20 displayed = 0.0020 actual
    this.blackPointControl = new NumericControl(this);
    this.blackPointControl.label.text = "Black Point:";
    this.blackPointControl.label.setFixedWidth(80);
-   this.blackPointControl.setRange(-0.1, 0.3);
-   this.blackPointControl.slider.setRange(0, 800);
+   this.blackPointControl.setRange(0, 100);
+   this.blackPointControl.slider.setRange(0, 1000);
    this.blackPointControl.slider.minWidth = 150;
-   this.blackPointControl.setPrecision(4);
-   this.blackPointControl.setValue(this.engine.blackPoint);
-   this.blackPointControl.toolTip = "Value subtracted before stretch";
+   this.blackPointControl.setPrecision(1);
+   this.blackPointControl.setValue(this.engine.blackPoint * 10000);
+   this.blackPointControl.toolTip = "Value subtracted before stretch (0-100 scale, actual = value/10000)";
    this.blackPointControl.onValueUpdated = function(value)
    {
-      this.dialog.engine.blackPoint = value;
+      this.dialog.engine.blackPoint = value / 10000;
       this.dialog.schedulePreviewUpdate();
    };
 
    this.blackRControl = new NumericControl(this);
    this.blackRControl.label.text = "Black (R):";
    this.blackRControl.label.setFixedWidth(80);
-   this.blackRControl.setRange(-0.1, 0.3);
-   this.blackRControl.slider.setRange(0, 800);
+   this.blackRControl.setRange(0, 100);
+   this.blackRControl.slider.setRange(0, 1000);
    this.blackRControl.slider.minWidth = 150;
-   this.blackRControl.setPrecision(4);
-   this.blackRControl.setValue(this.engine.blackR);
+   this.blackRControl.setPrecision(1);
+   this.blackRControl.setValue(this.engine.blackR * 10000);
    this.blackRControl.visible = false;
    this.blackRControl.onValueUpdated = function(value)
    {
-      this.dialog.engine.blackR = value;
+      this.dialog.engine.blackR = value / 10000;
       this.dialog.schedulePreviewUpdate();
    };
 
    this.blackGControl = new NumericControl(this);
    this.blackGControl.label.text = "Black (G):";
    this.blackGControl.label.setFixedWidth(80);
-   this.blackGControl.setRange(-0.1, 0.3);
-   this.blackGControl.slider.setRange(0, 800);
+   this.blackGControl.setRange(0, 100);
+   this.blackGControl.slider.setRange(0, 1000);
    this.blackGControl.slider.minWidth = 150;
-   this.blackGControl.setPrecision(4);
-   this.blackGControl.setValue(this.engine.blackG);
+   this.blackGControl.setPrecision(1);
+   this.blackGControl.setValue(this.engine.blackG * 10000);
    this.blackGControl.visible = false;
    this.blackGControl.onValueUpdated = function(value)
    {
-      this.dialog.engine.blackG = value;
+      this.dialog.engine.blackG = value / 10000;
       this.dialog.schedulePreviewUpdate();
    };
 
    this.blackBControl = new NumericControl(this);
    this.blackBControl.label.text = "Black (B):";
    this.blackBControl.label.setFixedWidth(80);
-   this.blackBControl.setRange(-0.1, 0.3);
-   this.blackBControl.slider.setRange(0, 800);
+   this.blackBControl.setRange(0, 100);
+   this.blackBControl.slider.setRange(0, 1000);
    this.blackBControl.slider.minWidth = 150;
-   this.blackBControl.setPrecision(4);
-   this.blackBControl.setValue(this.engine.blackB);
+   this.blackBControl.setPrecision(1);
+   this.blackBControl.setValue(this.engine.blackB * 10000);
    this.blackBControl.visible = false;
    this.blackBControl.onValueUpdated = function(value)
    {
-      this.dialog.engine.blackB = value;
+      this.dialog.engine.blackB = value / 10000;
       this.dialog.schedulePreviewUpdate();
    };
 
@@ -1160,6 +1163,9 @@ function LuptonDialog(engine)
    // Right Panel - Preview
    // -------------------------------------------------------------------------
 
+   // Capture dialog reference for use in callbacks
+   var dlg = this;
+
    // Preview toolbar
    this.realtimeCheckbox = new CheckBox(this);
    this.realtimeCheckbox.text = "Real-Time Preview";
@@ -1168,7 +1174,7 @@ function LuptonDialog(engine)
    this.realtimeCheckbox.onCheck = function(checked)
    {
       if (checked)
-         this.dialog.schedulePreviewUpdate();
+         dlg.schedulePreviewUpdate();
    };
 
    this.beforeButton = new PushButton(this);
@@ -1177,9 +1183,9 @@ function LuptonDialog(engine)
    this.beforeButton.toolTip = "Show original image";
    this.beforeButton.onClick = function()
    {
-      this.dialog.previewControl.previewMode = 1;
-      this.dialog.updatePreviewModeButtons();
-      this.dialog.schedulePreviewUpdate();
+      dlg.previewControl.previewMode = 1;
+      dlg.updatePreviewModeButtons();
+      dlg.schedulePreviewUpdate();
    };
 
    this.splitButton = new PushButton(this);
@@ -1188,9 +1194,9 @@ function LuptonDialog(engine)
    this.splitButton.toolTip = "Show split before/after view";
    this.splitButton.onClick = function()
    {
-      this.dialog.previewControl.previewMode = 2;
-      this.dialog.updatePreviewModeButtons();
-      this.dialog.schedulePreviewUpdate();
+      dlg.previewControl.previewMode = 2;
+      dlg.updatePreviewModeButtons();
+      dlg.schedulePreviewUpdate();
    };
 
    this.afterButton = new PushButton(this);
@@ -1199,9 +1205,9 @@ function LuptonDialog(engine)
    this.afterButton.toolTip = "Show processed image";
    this.afterButton.onClick = function()
    {
-      this.dialog.previewControl.previewMode = 0;
-      this.dialog.updatePreviewModeButtons();
-      this.dialog.schedulePreviewUpdate();
+      dlg.previewControl.previewMode = 0;
+      dlg.updatePreviewModeButtons();
+      dlg.schedulePreviewUpdate();
    };
 
    // Zoom controls
@@ -1211,9 +1217,9 @@ function LuptonDialog(engine)
    this.zoomOutButton.toolTip = "Zoom out";
    this.zoomOutButton.onClick = function()
    {
-      this.dialog.previewControl.zoomOut();
-      this.dialog.updateZoomLabel();
-      this.dialog.forcePreviewUpdate();
+      dlg.previewControl.zoomOut();
+      dlg.updateZoomLabel();
+      dlg.forcePreviewUpdate();
    };
 
    this.zoomLabel = new Label(this);
@@ -1227,9 +1233,9 @@ function LuptonDialog(engine)
    this.zoomInButton.toolTip = "Zoom in";
    this.zoomInButton.onClick = function()
    {
-      this.dialog.previewControl.zoomIn();
-      this.dialog.updateZoomLabel();
-      this.dialog.forcePreviewUpdate();
+      dlg.previewControl.zoomIn();
+      dlg.updateZoomLabel();
+      dlg.forcePreviewUpdate();
    };
 
    this.fitButton = new PushButton(this);
@@ -1238,11 +1244,11 @@ function LuptonDialog(engine)
    this.fitButton.toolTip = "Fit image to preview window";
    this.fitButton.onClick = function()
    {
-      this.dialog.previewControl.zoomLevel = 0;
-      this.dialog.previewControl.panX = 0;
-      this.dialog.previewControl.panY = 0;
-      this.dialog.updateZoomLabel();
-      this.dialog.forcePreviewUpdate();
+      dlg.previewControl.zoomLevel = 0;
+      dlg.previewControl.panX = 0;
+      dlg.previewControl.panY = 0;
+      dlg.updateZoomLabel();
+      dlg.forcePreviewUpdate();
    };
 
    var previewToolbar = new HorizontalSizer;
@@ -1263,7 +1269,7 @@ function LuptonDialog(engine)
    this.previewControl.setMinSize(400, 300);
 
    // Set up sampling callback
-   var dlg = this;
+   // Sampled values are actual pixel values, controls display value * 10000
    this.previewControl.onSampleCallback = function(r, g, b)
    {
       if (dlg.engine.linkedChannels)
@@ -1271,17 +1277,17 @@ function LuptonDialog(engine)
          // Use average as black point
          var avg = (r + g + b) / 3;
          dlg.engine.blackPoint = avg;
-         dlg.blackPointControl.setValue(avg);
-         console.writeln(format("Sampled black point: %.6f", avg));
+         dlg.blackPointControl.setValue(avg * 10000);  // Convert to display scale
+         console.writeln(format("Sampled black point: %.6f (display: %.1f)", avg, avg * 10000));
       }
       else
       {
          dlg.engine.blackR = r;
          dlg.engine.blackG = g;
          dlg.engine.blackB = b;
-         dlg.blackRControl.setValue(r);
-         dlg.blackGControl.setValue(g);
-         dlg.blackBControl.setValue(b);
+         dlg.blackRControl.setValue(r * 10000);  // Convert to display scale
+         dlg.blackGControl.setValue(g * 10000);
+         dlg.blackBControl.setValue(b * 10000);
          console.writeln(format("Sampled black point R: %.6f, G: %.6f, B: %.6f", r, g, b));
       }
       dlg.statusLabel.text = "Black point sampled from preview";
@@ -1306,8 +1312,8 @@ function LuptonDialog(engine)
    this.splitSlider.toolTip = "Adjust split position";
    this.splitSlider.onValueUpdated = function(value)
    {
-      this.dialog.previewControl.splitPosition = value;
-      this.dialog.schedulePreviewUpdate();
+      dlg.previewControl.splitPosition = value;
+      dlg.schedulePreviewUpdate();
    };
 
    this.splitControl = new Control(this);
@@ -1474,8 +1480,8 @@ function LuptonDialog(engine)
          var avgBp = (bp0 + bp1 + bp2) / 3;
 
          this.engine.blackPoint = avgBp;
-         this.blackPointControl.setValue(avgBp);
-         console.writeln(format("Auto black point (linked): %.6f", avgBp));
+         this.blackPointControl.setValue(avgBp * 10000);  // Convert to display scale
+         console.writeln(format("Auto black point (linked): %.6f (display: %.1f)", avgBp, avgBp * 10000));
       }
       else
       {
@@ -1487,9 +1493,9 @@ function LuptonDialog(engine)
          this.engine.blackG = bpG;
          this.engine.blackB = bpB;
 
-         this.blackRControl.setValue(bpR);
-         this.blackGControl.setValue(bpG);
-         this.blackBControl.setValue(bpB);
+         this.blackRControl.setValue(bpR * 10000);  // Convert to display scale
+         this.blackGControl.setValue(bpG * 10000);
+         this.blackBControl.setValue(bpB * 10000);
 
          console.writeln(format("Auto black point R: %.6f, G: %.6f, B: %.6f", bpR, bpG, bpB));
       }
@@ -1501,10 +1507,10 @@ function LuptonDialog(engine)
    {
       this.stretchControl.setValue(this.engine.stretch);
       this.qControl.setValue(this.engine.Q);
-      this.blackPointControl.setValue(this.engine.blackPoint);
-      this.blackRControl.setValue(this.engine.blackR);
-      this.blackGControl.setValue(this.engine.blackG);
-      this.blackBControl.setValue(this.engine.blackB);
+      this.blackPointControl.setValue(this.engine.blackPoint * 10000);  // Convert to display scale
+      this.blackRControl.setValue(this.engine.blackR * 10000);
+      this.blackGControl.setValue(this.engine.blackG * 10000);
+      this.blackBControl.setValue(this.engine.blackB * 10000);
       this.linkedCheckbox.checked = this.engine.linkedChannels;
       this.saturationControl.setValue(this.engine.saturation);
       this.clippingCombo.currentItem = this.engine.clippingMode;
