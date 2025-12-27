@@ -34,7 +34,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.6"
+#define VERSION "1.0.7"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection
@@ -838,10 +838,29 @@ function PreviewControl(parent, engine)
       this.UpdateZoom(this.zoom - 1);
    };
 
-   // Fit to window
+   // Fit to window - calculate zoom that fits image in viewport
    this.fitToWindow = function()
    {
-      this.UpdateZoom(this.zoomOutLimit);
+      if (!this.sourceWindow) return;
+      var image = this.sourceWindow.mainView.image;
+      var vpWidth = this.scrollbox.viewport.width;
+      var vpHeight = this.scrollbox.viewport.height;
+      if (vpWidth <= 0 || vpHeight <= 0) return;
+
+      // Calculate scale needed to fit
+      var scaleX = vpWidth / image.width;
+      var scaleY = vpHeight / image.height;
+      var fitScale = Math.min(scaleX, scaleY);
+
+      // Convert scale to zoom level
+      var fitZoom;
+      if (fitScale >= 1)
+         fitZoom = Math.floor(fitScale);  // 1:1 or greater
+      else
+         fitZoom = -Math.ceil(1 / fitScale) + 2;  // zoom out levels
+
+      fitZoom = Math.max(this.zoomOutLimit, Math.min(2, fitZoom));
+      this.UpdateZoom(fitZoom);
    };
 
    // Get zoom label text
@@ -1206,6 +1225,13 @@ function LuptonDialog(engine)
    actionSizer.add(this.applyButton);
    actionSizer.add(this.closeButton);
 
+   // --- Preview Enable Checkbox (for left panel) ---
+   // Note: onCheck handler is set after dlg is defined in the right panel section
+   this.showPreviewCheckbox = new CheckBox(this);
+   this.showPreviewCheckbox.text = "Show Preview";
+   this.showPreviewCheckbox.checked = true;
+   this.showPreviewCheckbox.toolTip = "Show/hide the preview panel";
+
    // --- Left Panel Assembly ---
    this.leftPanel = new Control(this);
    this.leftPanel.setFixedWidth(310);
@@ -1217,6 +1243,8 @@ function LuptonDialog(engine)
    this.leftPanel.sizer.add(this.blackPointGroup);
    this.leftPanel.sizer.add(this.colorGroup);
    this.leftPanel.sizer.addStretch();
+   this.leftPanel.sizer.add(this.showPreviewCheckbox);
+   this.leftPanel.sizer.addSpacing(8);
    this.leftPanel.sizer.add(actionSizer);
 
    // -------------------------------------------------------------------------
@@ -1226,17 +1254,16 @@ function LuptonDialog(engine)
    // Capture dialog reference for use in callbacks
    var dlg = this;
 
-   // Preview toolbar
-   this.realtimeCheckbox = new CheckBox(this);
-   this.realtimeCheckbox.text = "Real-Time Preview";
-   this.realtimeCheckbox.checked = true;
-   this.realtimeCheckbox.toolTip = "Update preview automatically when parameters change";
-   this.realtimeCheckbox.onCheck = function(checked)
+   // Set up show/hide preview checkbox handler (needs dlg reference)
+   this.showPreviewCheckbox.onCheck = function(checked)
    {
+      dlg.rightPanel.visible = checked;
       if (checked)
-         dlg.forcePreviewUpdate();  // Force immediate update when enabled
+         dlg.forcePreviewUpdate();
+      dlg.adjustToContents();
    };
 
+   // Preview toolbar
    this.beforeButton = new PushButton(this);
    this.beforeButton.text = "Before";
    this.beforeButton.setFixedWidth(50);
@@ -1308,8 +1335,6 @@ function LuptonDialog(engine)
 
    var previewToolbar = new HorizontalSizer;
    previewToolbar.spacing = 6;
-   previewToolbar.add(this.realtimeCheckbox);
-   previewToolbar.addStretch();
    previewToolbar.add(this.beforeButton);
    previewToolbar.add(this.splitButton);
    previewToolbar.add(this.afterButton);
@@ -1480,7 +1505,7 @@ function LuptonDialog(engine)
 
    this.schedulePreviewUpdate = function()
    {
-      if (!this.realtimeCheckbox.checked)
+      if (!this.showPreviewCheckbox.checked)
          return;
 
       // Throttle updates - skip if last update was less than 80ms ago
