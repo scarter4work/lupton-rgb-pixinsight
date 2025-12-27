@@ -12,6 +12,7 @@
 // ============================================================================
 
 #feature-id    Utilities > LuptonRGB
+#script-id     LuptonRGB
 #feature-info  Lupton RGB Stretch - Color-preserving arcsinh stretch for \
                astronomical images. Based on Lupton et al. (2004) PASP 116:133. \
                Creates properly color-balanced RGB images from linear data \
@@ -34,7 +35,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.12"
+#define VERSION "1.0.13"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection

@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xri version="1.0" xmlns="http://www.pixinsight.com/xri" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.pixinsight.com/xri http://pixinsight.com/xri/xri-1.0.xsd">
-
    <description>
       <p>Lupton RGB Stretch for PixInsight</p>
       <p>Color-preserving arcsinh stretch algorithm based on Lupton et al. (2004) PASP 116:133</p>
       <p>Repository: https://github.com/scarter4work/lupton-rgb-pixinsight</p>
    </description>
-
    <platform os="all" arch="noarch" version="1.8.0:2.0.0">
-
-      <package fileName="LuptonRGB_v1.0.12.zip"
-               sha1="5d5681c39fdc2d1f7ed4a7197ae7b3aa094cdca5"
-               type="script"
-               releaseDate="20241227">
+      <package fileName="LuptonRGB_v1.0.13.zip" sha1="0b0c0d2afc2396dc8fc8077dbee4031b61386e90" type="script" releaseDate="20241227">
          <title>Lupton RGB Stretch</title>
          <description>
-            <p><b>Lupton RGB Stretch v1.0.12</b></p>
+            <p>
+               <b>Lupton RGB Stretch v1.0.13</b>
+            </p>
             <p>Implements the Lupton et al. (2004) RGB stretch algorithm for creating color-preserving stretched images from high dynamic range astronomical data.</p>
-            <p><b>Changes in v1.0.12:</b></p>
-            <p>- Fixed: Target image dropdown now properly changes the loaded image</p>
-            <p><b>Features:</b></p>
+            <p>
+               <b>Changes in v1.0.13:</b>
+            </p>
+            <p>- Added #script-id directive for code signing support</p>
+            <p>
+               <b>Features:</b>
+            </p>
             <p>- Arcsinh stretch with configurable alpha (up to 1000) and Q parameters</p>
             <p>- Color-preserving clipping (prevents star color blowout)</p>
             <p>- Black point 0-100 scale (20 = 0.0020 actual)</p>
@@ -27,7 +27,6 @@
             <p>- Saturation boost post-processing</p>
          </description>
       </package>
-
    </platform>
-
 </xri>
+<Signature developerId="scarter4work" timestamp="2025-12-27T21:07:55.717Z" encoding="Base64">eeMASFAKDWp4fG3IWdrkg1u/Zu2O+ogj3a8WidUH291jtib2L0753OWuiWPAgSv9tVzuGlIjzoFGWIHp6j8ZAQ==</Signature>
