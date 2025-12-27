@@ -34,7 +34,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.7"
+#define VERSION "1.0.8"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection
@@ -853,11 +853,13 @@ function PreviewControl(parent, engine)
       var fitScale = Math.min(scaleX, scaleY);
 
       // Convert scale to zoom level
+      // zoom > 0: scale = zoom (so zoom = scale)
+      // zoom <= 0: scale = 1 / (-zoom + 2), so zoom = 2 - (1/scale)
       var fitZoom;
       if (fitScale >= 1)
-         fitZoom = Math.floor(fitScale);  // 1:1 or greater
+         fitZoom = Math.floor(fitScale);
       else
-         fitZoom = -Math.ceil(1 / fitScale) + 2;  // zoom out levels
+         fitZoom = Math.floor(2 - (1 / fitScale));
 
       fitZoom = Math.max(this.zoomOutLimit, Math.min(2, fitZoom));
       this.UpdateZoom(fitZoom);
