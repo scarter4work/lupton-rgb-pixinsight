@@ -258,8 +258,8 @@ function LuptonEngine()
          var intensity = "($T[0]+$T[1]+$T[2])/3";
          var epsilon = 1e-10;
 
-         // Prevent Q from being too small (causes division issues)
-         var safeQ = Math.max(0.01, Q);
+         // Prevent Q from being too close to zero (causes division issues)
+         var safeQ = (Math.abs(Q) < 0.01) ? (Q >= 0 ? 0.01 : -0.01) : Q;
 
          // F(I) = asinh(alpha*Q*(I-min))/Q using ln(x + sqrt(x^2+1))
          var aQ = alpha * safeQ;
@@ -835,8 +835,8 @@ function LuptonDialog(engine)
    this.qControl = new NumericControl(this);
    this.qControl.label.text = "Q (softening):";
    this.qControl.label.setFixedWidth(80);
-   this.qControl.setRange(0.01, 30.0);
-   this.qControl.slider.setRange(0, 3000);
+   this.qControl.setRange(-10.0, 30.0);
+   this.qControl.slider.setRange(0, 4000);
    this.qControl.slider.minWidth = 150;
    this.qControl.setPrecision(2);
    this.qControl.setValue(this.engine.Q);
