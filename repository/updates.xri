@@ -6,7 +6,7 @@
       <p>Repository: https://github.com/scarter4work/lupton-rgb-pixinsight</p>
    </description>
    <platform os="all" arch="noarch" version="1.8.0:2.0.0">
-      <package fileName="LuptonRGB_v1.0.13.zip" sha1="0b0c0d2afc2396dc8fc8077dbee4031b61386e90" type="script" releaseDate="20241227">
+      <package fileName="LuptonRGB_v1.0.13.zip" sha1="c908eb1bbc0c46d1d4521f0da2e53a4982155fd1" type="script" releaseDate="20241227">
          <title>Lupton RGB Stretch</title>
          <description>
             <p>
@@ -29,4 +29,4 @@
       </package>
    </platform>
 </xri>
-<Signature developerId="scarter4work" timestamp="2025-12-27T21:07:55.717Z" encoding="Base64">eeMASFAKDWp4fG3IWdrkg1u/Zu2O+ogj3a8WidUH291jtib2L0753OWuiWPAgSv9tVzuGlIjzoFGWIHp6j8ZAQ==</Signature>
+<Signature developerId="scarter4work" timestamp="2025-12-27T21:17:48.734Z" encoding="Base64">kFCCkJW15JA5E1c2zw8hOwB8qA/tro9GjmVmhZTxGyTiSc6IBs+X27eNXtY+g3LVSb48fOHMtJ/aK+Aj1I3JBQ==</Signature>
