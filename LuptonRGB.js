@@ -34,7 +34,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.0"
+#define VERSION "1.0.1"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection
