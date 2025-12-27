@@ -34,7 +34,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.1"
+#define VERSION "1.0.2"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection
@@ -577,7 +577,7 @@ function PreviewControl(parent, engine)
 
       if (!this.sourceWindow)
       {
-         this.repaint();
+         this.update();  // Force immediate redraw
          return;
       }
 
@@ -593,7 +593,7 @@ function PreviewControl(parent, engine)
          this.panY
       );
 
-      this.repaint();
+      this.update();  // Force immediate redraw
    };
 
    // Paint event handler
@@ -974,7 +974,7 @@ function LuptonDialog(engine)
    this.blackPointControl.setRange(0, 100);
    this.blackPointControl.slider.setRange(0, 1000);
    this.blackPointControl.slider.minWidth = 150;
-   this.blackPointControl.setPrecision(1);
+   this.blackPointControl.setPrecision(0);
    this.blackPointControl.setValue(this.engine.blackPoint * 10000);
    this.blackPointControl.toolTip = "Value subtracted before stretch (0-100 scale, actual = value/10000)";
    this.blackPointControl.onValueUpdated = function(value)
@@ -989,7 +989,7 @@ function LuptonDialog(engine)
    this.blackRControl.setRange(0, 100);
    this.blackRControl.slider.setRange(0, 1000);
    this.blackRControl.slider.minWidth = 150;
-   this.blackRControl.setPrecision(1);
+   this.blackRControl.setPrecision(0);
    this.blackRControl.setValue(this.engine.blackR * 10000);
    this.blackRControl.visible = false;
    this.blackRControl.onValueUpdated = function(value)
@@ -1004,7 +1004,7 @@ function LuptonDialog(engine)
    this.blackGControl.setRange(0, 100);
    this.blackGControl.slider.setRange(0, 1000);
    this.blackGControl.slider.minWidth = 150;
-   this.blackGControl.setPrecision(1);
+   this.blackGControl.setPrecision(0);
    this.blackGControl.setValue(this.engine.blackG * 10000);
    this.blackGControl.visible = false;
    this.blackGControl.onValueUpdated = function(value)
@@ -1019,7 +1019,7 @@ function LuptonDialog(engine)
    this.blackBControl.setRange(0, 100);
    this.blackBControl.slider.setRange(0, 1000);
    this.blackBControl.slider.minWidth = 150;
-   this.blackBControl.setPrecision(1);
+   this.blackBControl.setPrecision(0);
    this.blackBControl.setValue(this.engine.blackB * 10000);
    this.blackBControl.visible = false;
    this.blackBControl.onValueUpdated = function(value)
@@ -1248,6 +1248,7 @@ function LuptonDialog(engine)
    this.fitButton.onClick = function()
    {
       dlg.previewControl.zoomLevel = 0;
+      dlg.previewControl.zoomFactor = 1.0;  // Must reset this too!
       dlg.previewControl.panX = 0;
       dlg.previewControl.panY = 0;
       dlg.updateZoomLabel();
