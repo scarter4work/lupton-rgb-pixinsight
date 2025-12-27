@@ -34,7 +34,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.2"
+#define VERSION "1.0.3"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection
@@ -577,7 +577,7 @@ function PreviewControl(parent, engine)
 
       if (!this.sourceWindow)
       {
-         this.update();  // Force immediate redraw
+         this.repaint();
          return;
       }
 
@@ -593,7 +593,7 @@ function PreviewControl(parent, engine)
          this.panY
       );
 
-      this.update();  // Force immediate redraw
+      this.repaint();
    };
 
    // Paint event handler
@@ -1222,7 +1222,6 @@ function LuptonDialog(engine)
    {
       dlg.previewControl.zoomOut();
       dlg.updateZoomLabel();
-      dlg.forcePreviewUpdate();
    };
 
    this.zoomLabel = new Label(this);
@@ -1238,7 +1237,6 @@ function LuptonDialog(engine)
    {
       dlg.previewControl.zoomIn();
       dlg.updateZoomLabel();
-      dlg.forcePreviewUpdate();
    };
 
    this.fitButton = new PushButton(this);
@@ -1247,12 +1245,8 @@ function LuptonDialog(engine)
    this.fitButton.toolTip = "Fit image to preview window";
    this.fitButton.onClick = function()
    {
-      dlg.previewControl.zoomLevel = 0;
-      dlg.previewControl.zoomFactor = 1.0;  // Must reset this too!
-      dlg.previewControl.panX = 0;
-      dlg.previewControl.panY = 0;
+      dlg.previewControl.fitToWindow();
       dlg.updateZoomLabel();
-      dlg.forcePreviewUpdate();
    };
 
    var previewToolbar = new HorizontalSizer;
