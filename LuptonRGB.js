@@ -34,7 +34,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.3"
+#define VERSION "1.0.4"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection
@@ -551,11 +551,13 @@ function PreviewControl(parent, engine)
    // Fit to window
    this.fitToWindow = function()
    {
+      console.writeln("fitToWindow called: setting zoomLevel=0");
       this.zoomLevel = 0;
       this.zoomFactor = 1.0;
       this.panX = 0;
       this.panY = 0;
       this.updatePreview();
+      console.writeln("fitToWindow complete");
    };
 
    // Get zoom label text
@@ -564,6 +566,12 @@ function PreviewControl(parent, engine)
       if (this.zoomLevel === 0) return "Fit";
       var pct = Math.round(this.getZoomFactorFromLevel(this.zoomLevel) * 100);
       return pct + "%";
+   };
+
+   // Force redraw - mirrors official PJSR PreviewControl pattern
+   this.forceRedraw = function()
+   {
+      this.update();
    };
 
    // Update the preview
@@ -577,7 +585,7 @@ function PreviewControl(parent, engine)
 
       if (!this.sourceWindow)
       {
-         this.repaint();
+         this.forceRedraw();
          return;
       }
 
@@ -593,7 +601,7 @@ function PreviewControl(parent, engine)
          this.panY
       );
 
-      this.repaint();
+      this.forceRedraw();
    };
 
    // Paint event handler

@@ -9,18 +9,18 @@
 
    <platform os="all" arch="noarch" version="1.8.0:2.0.0">
 
-      <package fileName="LuptonRGB_v1.0.3.zip"
-               sha1="934d7e9c9d565311f21a195ad7423b516ad10324"
+      <package fileName="LuptonRGB_v1.0.4.zip"
+               sha1="2efc5f599685ae32233f7a2555b01c28bdcb9a40"
                type="script"
                releaseDate="20241227">
          <title>Lupton RGB Stretch</title>
          <description>
-            <p><b>Lupton RGB Stretch v1.0.3</b></p>
+            <p><b>Lupton RGB Stretch v1.0.4</b></p>
             <p>Implements the Lupton et al. (2004) RGB stretch algorithm for creating color-preserving stretched images from high dynamic range astronomical data.</p>
-            <p><b>Changes in v1.0.3:</b></p>
-            <p>- FIXED: Reverted update() back to repaint() (PJSR compatible)</p>
-            <p>- FIXED: Fit button now uses fitToWindow() method directly</p>
-            <p>- Cleaned up zoom button handlers for consistency</p>
+            <p><b>Changes in v1.0.4:</b></p>
+            <p>- FIXED: Fit button now uses official PJSR forceRedraw()/update() pattern</p>
+            <p>- Added debug console output to fitToWindow() for troubleshooting</p>
+            <p>- Pattern matches official PJSR PreviewControl.js implementation</p>
             <p><b>Features:</b></p>
             <p>- Arcsinh stretch with configurable alpha (up to 500) and Q parameters</p>
             <p>- Color-preserving clipping (prevents star color blowout)</p>
