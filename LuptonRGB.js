@@ -34,7 +34,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.9"
+#define VERSION "1.0.10"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection
@@ -1054,8 +1054,8 @@ function LuptonDialog(engine)
    this.stretchControl = new NumericControl(this);
    this.stretchControl.label.text = "Stretch (\u03B1):";
    this.stretchControl.label.setFixedWidth(80);
-   this.stretchControl.setRange(0.1, 500.0);
-   this.stretchControl.slider.setRange(0, 5000);
+   this.stretchControl.setRange(0.1, 1000.0);
+   this.stretchControl.slider.setRange(0, 10000);
    this.stretchControl.slider.minWidth = 150;
    this.stretchControl.setPrecision(2);
    this.stretchControl.setValue(this.engine.stretch);
@@ -1293,12 +1293,19 @@ function LuptonDialog(engine)
    actionSizer.add(this.applyButton);
    actionSizer.add(this.closeButton);
 
-   // --- Preview Enable Checkbox (for left panel) ---
-   // Note: onCheck handler is set after dlg is defined in the right panel section
+   // --- Preview Options Group ---
    this.showPreviewCheckbox = new CheckBox(this);
    this.showPreviewCheckbox.text = "Show Preview";
    this.showPreviewCheckbox.checked = true;
    this.showPreviewCheckbox.toolTip = "Show/hide the preview panel";
+   // Note: onCheck handler is set after dlg is defined in the right panel section
+
+   this.previewOptionsGroup = new GroupBox(this);
+   this.previewOptionsGroup.title = "Preview Options";
+   this.previewOptionsGroup.sizer = new VerticalSizer;
+   this.previewOptionsGroup.sizer.margin = 6;
+   this.previewOptionsGroup.sizer.spacing = 4;
+   this.previewOptionsGroup.sizer.add(this.showPreviewCheckbox);
 
    // --- Left Panel Assembly ---
    this.leftPanel = new Control(this);
@@ -1310,9 +1317,8 @@ function LuptonDialog(engine)
    this.leftPanel.sizer.add(this.stretchGroup);
    this.leftPanel.sizer.add(this.blackPointGroup);
    this.leftPanel.sizer.add(this.colorGroup);
+   this.leftPanel.sizer.add(this.previewOptionsGroup);
    this.leftPanel.sizer.addStretch();
-   this.leftPanel.sizer.add(this.showPreviewCheckbox);
-   this.leftPanel.sizer.addSpacing(8);
    this.leftPanel.sizer.add(actionSizer);
 
    // -------------------------------------------------------------------------
