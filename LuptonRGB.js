@@ -108,7 +108,7 @@ function LuptonEngine()
       var bOut = (b - minB) * scale;
 
       // Step 4: Apply saturation boost
-      if (this.saturation != 1.0)
+      if (Math.abs(this.saturation - 1.0) > 1e-6)
       {
          var lum = (rOut + gOut + bOut) / 3;
          rOut = lum + (rOut - lum) * this.saturation;
@@ -265,79 +265,89 @@ function LuptonEngine()
          var aQ = alpha * safeQ;
          var arg = aQ + "*(" + intensity + "-" + avgMin + ")";
          var FI = "ln(" + arg + "+sqrt(" + arg + "*" + arg + "+1))/" + safeQ;
-         var scale = "iif(" + intensity + ">" + (avgMin + epsilon) + "," + FI + "/(" + intensity + "-" + avgMin + "),0)";
+         // Add protection against division by very small denominators
+         var scale = "iif(" + intensity + ">" + (avgMin + epsilon) + "," + FI + "/max(" + epsilon + "," + intensity + "-" + avgMin + "),0)";
 
-         // PASS 1: Apply Lupton stretch (no clipping yet)
-         var P1 = new PixelMath;
-         P1.expression = "max(0,($T[0]-" + minR + ")*" + scale + ")";
-         P1.expression1 = "max(0,($T[1]-" + minG + ")*" + scale + ")";
-         P1.expression2 = "max(0,($T[2]-" + minB + ")*" + scale + ")";
-         P1.useSingleExpression = false;
-         P1.createNewImage = false;
-         P1.rescale = false;
-         P1.truncate = false;  // Don't truncate yet - preserve values > 1
-
-         console.writeln("Pass 1: Applying Lupton stretch...");
-         P1.executeOn(outputWindow.mainView);
-
-         // PASS 2: Apply saturation adjustment if needed
-         if (this.saturation != 1.0)
+         // Wrap all PixelMath passes in a single process block for proper undo
+         outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
+         try
          {
-            var sat = this.saturation;
-            var P2 = new PixelMath;
-            // lum = (R+G+B)/3, out = lum + (in - lum) * saturation
-            var lum = "($T[0]+$T[1]+$T[2])/3";
-            P2.expression = lum + "+($T[0]-" + lum + ")*" + sat;
-            P2.expression1 = lum + "+($T[1]-" + lum + ")*" + sat;
-            P2.expression2 = lum + "+($T[2]-" + lum + ")*" + sat;
-            P2.useSingleExpression = false;
-            P2.createNewImage = false;
-            P2.rescale = false;
-            P2.truncate = false;
+            // PASS 1: Apply Lupton stretch (no clipping yet)
+            var P1 = new PixelMath;
+            P1.expression = "max(0,($T[0]-" + minR + ")*" + scale + ")";
+            P1.expression1 = "max(0,($T[1]-" + minG + ")*" + scale + ")";
+            P1.expression2 = "max(0,($T[2]-" + minB + ")*" + scale + ")";
+            P1.useSingleExpression = false;
+            P1.createNewImage = false;
+            P1.rescale = false;
+            P1.truncate = false;  // Don't truncate yet - preserve values > 1
 
-            console.writeln("Pass 2: Applying saturation...");
-            P2.executeOn(outputWindow.mainView);
-         }
+            console.writeln("Pass 1: Applying Lupton stretch...");
+            P1.executeOn(outputWindow.mainView);
 
-         // PASS 3: Apply clipping based on mode
-         var P3 = new PixelMath;
-         if (this.clippingMode == 0)
-         {
-            // Preserve Color: divide all channels by max(R,G,B) if any > 1
-            // This is the key Lupton feature - colors are preserved!
-            var maxRGB = "max($T[0],max($T[1],$T[2]))";
-            var clipScale = "iif(" + maxRGB + ">1,1/" + maxRGB + ",1)";
-            P3.expression = "max(0,$T[0]*" + clipScale + ")";
-            P3.expression1 = "max(0,$T[1]*" + clipScale + ")";
-            P3.expression2 = "max(0,$T[2]*" + clipScale + ")";
-            P3.rescale = false;
-            P3.truncate = true;
-            console.writeln("Pass 3: Applying color-preserving clip...");
-         }
-         else if (this.clippingMode == 1)
-         {
-            // Hard clip each channel independently
-            P3.expression = "min(1,max(0,$T[0]))";
-            P3.expression1 = "min(1,max(0,$T[1]))";
-            P3.expression2 = "min(1,max(0,$T[2]))";
-            P3.rescale = false;
-            P3.truncate = true;
-            console.writeln("Pass 3: Applying hard clip...");
-         }
-         else
-         {
-            // Rescale mode - let PixelMath handle it
-            P3.expression = "$T[0]";
-            P3.expression1 = "$T[1]";
-            P3.expression2 = "$T[2]";
-            P3.rescale = true;
-            P3.truncate = true;
-            console.writeln("Pass 3: Rescaling to fit...");
-         }
-         P3.useSingleExpression = false;
-         P3.createNewImage = false;
+            // PASS 2: Apply saturation adjustment if needed
+            if (Math.abs(this.saturation - 1.0) > 1e-6)
+            {
+               var sat = this.saturation;
+               var P2 = new PixelMath;
+               // lum = (R+G+B)/3, out = lum + (in - lum) * saturation
+               var lum = "($T[0]+$T[1]+$T[2])/3";
+               P2.expression = lum + "+($T[0]-" + lum + ")*" + sat;
+               P2.expression1 = lum + "+($T[1]-" + lum + ")*" + sat;
+               P2.expression2 = lum + "+($T[2]-" + lum + ")*" + sat;
+               P2.useSingleExpression = false;
+               P2.createNewImage = false;
+               P2.rescale = false;
+               P2.truncate = false;
 
-         P3.executeOn(outputWindow.mainView);
+               console.writeln("Pass 2: Applying saturation...");
+               P2.executeOn(outputWindow.mainView);
+            }
+
+            // PASS 3: Apply clipping based on mode
+            var P3 = new PixelMath;
+            if (this.clippingMode === 0)
+            {
+               // Preserve Color: divide all channels by max(R,G,B) if any > 1
+               // This is the key Lupton feature - colors are preserved!
+               var maxRGB = "max($T[0],max($T[1],$T[2]))";
+               var clipScale = "iif(" + maxRGB + ">1,1/" + maxRGB + ",1)";
+               P3.expression = "max(0,$T[0]*" + clipScale + ")";
+               P3.expression1 = "max(0,$T[1]*" + clipScale + ")";
+               P3.expression2 = "max(0,$T[2]*" + clipScale + ")";
+               P3.rescale = false;
+               P3.truncate = true;
+               console.writeln("Pass 3: Applying color-preserving clip...");
+            }
+            else if (this.clippingMode === 1)
+            {
+               // Hard clip each channel independently
+               P3.expression = "min(1,max(0,$T[0]))";
+               P3.expression1 = "min(1,max(0,$T[1]))";
+               P3.expression2 = "min(1,max(0,$T[2]))";
+               P3.rescale = false;
+               P3.truncate = true;
+               console.writeln("Pass 3: Applying hard clip...");
+            }
+            else
+            {
+               // Rescale mode - let PixelMath handle it
+               P3.expression = "$T[0]";
+               P3.expression1 = "$T[1]";
+               P3.expression2 = "$T[2]";
+               P3.rescale = true;
+               P3.truncate = true;
+               console.writeln("Pass 3: Rescaling to fit...");
+            }
+            P3.useSingleExpression = false;
+            P3.createNewImage = false;
+
+            P3.executeOn(outputWindow.mainView);
+         }
+         finally
+         {
+            outputWindow.mainView.endProcess();
+         }
 
          var elapsed = (new Date().getTime() - startTime) / 1000;
          console.writeln(format("Processing completed in %.2f seconds", elapsed));
@@ -431,7 +441,7 @@ function LuptonEngine()
             var rOut, gOut, bOut;
 
             // Determine if this pixel is in "before" or "after" region
-            var isBefore = (showBefore == 1) || (showBefore == 2 && px < splitX);
+            var isBefore = (showBefore === 1) || (showBefore === 2 && px < splitX);
 
             if (isBefore)
             {
@@ -600,7 +610,7 @@ function PreviewControl(parent, engine)
          g.drawBitmap(bx, by, this.bitmap);
 
          // Draw split line if in split mode
-         if (this.previewMode == 2)
+         if (this.previewMode === 2)
          {
             var splitX = bx + Math.round(this.bitmap.width * this.splitPosition / 100);
             g.pen = new Pen(0xaaffffff, 2);
@@ -612,7 +622,7 @@ function PreviewControl(parent, engine)
             g.drawText(bx + 5, by + 15, "BEFORE");
             g.drawText(bx + this.bitmap.width - 45, by + 15, "AFTER");
          }
-         else if (this.previewMode == 1)
+         else if (this.previewMode === 1)
          {
             g.pen = new Pen(0xffffffff);
             g.font = new Font(FontFamily_SansSerif, 9);
@@ -668,19 +678,34 @@ function PreviewControl(parent, engine)
          var py = y - by;
          if (px >= 0 && px < this.bitmap.width && py >= 0 && py < this.bitmap.height)
          {
-            // Map preview coords to image coords
+            // Map preview coords to image coords (same logic as generatePreview)
             var image = this.sourceWindow.mainView.image;
             var imgWidth = image.width;
             var imgHeight = image.height;
 
             var maxPreviewW = Math.min(this.width, 800);
             var maxPreviewH = Math.min(this.height, 600);
-            var scaleX = imgWidth / maxPreviewW;
-            var scaleY = imgHeight / maxPreviewH;
-            var scale = Math.max(scaleX, scaleY);
 
-            var ix = Math.min(Math.floor(px * scale), imgWidth - 1);
-            var iy = Math.min(Math.floor(py * scale), imgHeight - 1);
+            var ix, iy;
+            if (this.zoomLevel === 0)
+            {
+               // Fit mode - calculate scale to fit
+               var scaleX = imgWidth / maxPreviewW;
+               var scaleY = imgHeight / maxPreviewH;
+               var scale = Math.max(scaleX, scaleY);
+               ix = Math.min(Math.floor(px * scale), imgWidth - 1);
+               iy = Math.min(Math.floor(py * scale), imgHeight - 1);
+            }
+            else
+            {
+               // Zoom mode - account for zoom factor and pan offset
+               var zoomFactor = Math.pow(2, this.zoomLevel - 1);
+               var scale = 1.0 / zoomFactor;
+               var offsetX = Math.max(0, Math.min(imgWidth - this.bitmap.width / zoomFactor, this.panX));
+               var offsetY = Math.max(0, Math.min(imgHeight - this.bitmap.height / zoomFactor, this.panY));
+               ix = Math.min(Math.floor(offsetX + px * scale), imgWidth - 1);
+               iy = Math.min(Math.floor(offsetY + py * scale), imgHeight - 1);
+            }
 
             // Sample pixel values
             var r = image.sample(ix, iy, 0);
@@ -716,15 +741,30 @@ function PreviewControl(parent, engine)
       var imgWidth = image.width;
       var imgHeight = image.height;
 
-      // Calculate scale (same logic as generatePreview)
+      // Calculate scale (same logic as generatePreview, accounting for zoom)
       var maxPreviewW = Math.min(this.width, 800);
       var maxPreviewH = Math.min(this.height, 600);
-      var scaleX = imgWidth / maxPreviewW;
-      var scaleY = imgHeight / maxPreviewH;
-      var scale = Math.max(scaleX, scaleY);
 
-      var ix = Math.min(Math.floor(px * scale), imgWidth - 1);
-      var iy = Math.min(Math.floor(py * scale), imgHeight - 1);
+      var ix, iy;
+      if (this.zoomLevel === 0)
+      {
+         // Fit mode - calculate scale to fit
+         var scaleX = imgWidth / maxPreviewW;
+         var scaleY = imgHeight / maxPreviewH;
+         var scale = Math.max(scaleX, scaleY);
+         ix = Math.min(Math.floor(px * scale), imgWidth - 1);
+         iy = Math.min(Math.floor(py * scale), imgHeight - 1);
+      }
+      else
+      {
+         // Zoom mode - account for zoom factor and pan offset
+         var zoomFactor = Math.pow(2, this.zoomLevel - 1);
+         var scale = 1.0 / zoomFactor;
+         var offsetX = Math.max(0, Math.min(imgWidth - this.bitmap.width / zoomFactor, this.panX));
+         var offsetY = Math.max(0, Math.min(imgHeight - this.bitmap.height / zoomFactor, this.panY));
+         ix = Math.min(Math.floor(offsetX + px * scale), imgWidth - 1);
+         iy = Math.min(Math.floor(offsetY + py * scale), imgHeight - 1);
+      }
 
       // Sample the pixel values
       var r = image.sample(ix, iy, 0);
@@ -1335,10 +1375,10 @@ function LuptonDialog(engine)
    {
       var mode = this.previewControl.previewMode;
       // Update button text to show which is active
-      this.beforeButton.text = (mode == 1) ? "[Before]" : "Before";
-      this.splitButton.text = (mode == 2) ? "[Split]" : "Split";
-      this.afterButton.text = (mode == 0) ? "[After]" : "After";
-      this.splitControl.visible = (mode == 2);
+      this.beforeButton.text = (mode === 1) ? "[Before]" : "Before";
+      this.splitButton.text = (mode === 2) ? "[Split]" : "Split";
+      this.afterButton.text = (mode === 0) ? "[After]" : "After";
+      this.splitControl.visible = (mode === 2);
    };
 
    this.updateZoomLabel = function()
