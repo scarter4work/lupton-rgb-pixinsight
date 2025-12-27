@@ -655,8 +655,45 @@ function PreviewControl(parent, engine)
    {
       this.cursorX = x;
       this.cursorY = y;
-      // The dialog will handle updating cursor info
+
+      // Update cursor info if callback is set
+      if (this.onCursorCallback && this.sourceWindow && this.bitmap)
+      {
+         // Calculate bitmap position (centered in control)
+         var bx = Math.round((this.width - this.bitmap.width) / 2);
+         var by = Math.round((this.height - this.bitmap.height) / 2);
+
+         // Check if cursor is within bitmap
+         var px = x - bx;
+         var py = y - by;
+         if (px >= 0 && px < this.bitmap.width && py >= 0 && py < this.bitmap.height)
+         {
+            // Map preview coords to image coords
+            var image = this.sourceWindow.mainView.image;
+            var imgWidth = image.width;
+            var imgHeight = image.height;
+
+            var maxPreviewW = Math.min(this.width, 800);
+            var maxPreviewH = Math.min(this.height, 600);
+            var scaleX = imgWidth / maxPreviewW;
+            var scaleY = imgHeight / maxPreviewH;
+            var scale = Math.max(scaleX, scaleY);
+
+            var ix = Math.min(Math.floor(px * scale), imgWidth - 1);
+            var iy = Math.min(Math.floor(py * scale), imgHeight - 1);
+
+            // Sample pixel values
+            var r = image.sample(ix, iy, 0);
+            var g = image.sample(ix, iy, 1);
+            var b = image.sample(ix, iy, 2);
+
+            this.onCursorCallback(ix, iy, r, g, b);
+         }
+      }
    };
+
+   // Callback for cursor info updates
+   this.onCursorCallback = null;
 
    // Mouse click for sampling
    this.onMousePress = function(x, y, button, modifiers)
@@ -1161,7 +1198,9 @@ function LuptonDialog(engine)
    this.fitButton.toolTip = "Fit image to preview window";
    this.fitButton.onClick = function()
    {
-      this.dialog.previewControl.fitToWindow();
+      this.dialog.previewControl.zoomLevel = 0;
+      this.dialog.previewControl.panX = 0;
+      this.dialog.previewControl.panY = 0;
       this.dialog.updateZoomLabel();
       this.dialog.forcePreviewUpdate();
    };
@@ -1207,6 +1246,12 @@ function LuptonDialog(engine)
       }
       dlg.statusLabel.text = "Black point sampled from preview";
       dlg.schedulePreviewUpdate();
+   };
+
+   // Set up cursor tracking callback
+   this.previewControl.onCursorCallback = function(ix, iy, r, g, b)
+   {
+      dlg.cursorInfoLabel.text = format("Cursor: (%d, %d) | R=%.4f G=%.4f B=%.4f", ix, iy, r, g, b);
    };
 
    // Split position slider
