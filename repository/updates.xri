@@ -9,16 +9,18 @@
 
    <platform os="all" arch="noarch" version="1.8.0:2.0.0">
 
-      <package fileName="LuptonRGB_v1.0.8.zip"
-               sha1="d4dfe72ebd2de98fdcf20415216be5d9768d1f50"
+      <package fileName="LuptonRGB_v1.0.9.zip"
+               sha1="f29046ea56704916a14a8cbf453ca618b40021cc"
                type="script"
                releaseDate="20241227">
          <title>Lupton RGB Stretch</title>
          <description>
-            <p><b>Lupton RGB Stretch v1.0.8</b></p>
+            <p><b>Lupton RGB Stretch v1.0.9</b></p>
             <p>Implements the Lupton et al. (2004) RGB stretch algorithm for creating color-preserving stretched images from high dynamic range astronomical data.</p>
-            <p><b>Changes in v1.0.8:</b></p>
-            <p>- FIXED: Fit button zoom calculation formula corrected</p>
+            <p><b>Changes in v1.0.9:</b></p>
+            <p>- FIXED: Preview now renders at correct size for viewport</p>
+            <p>- Removed 800x600 cap that caused tiny preview at zoom-out levels</p>
+            <p>- Added generatePreviewAtSize for proper scaled rendering</p>
             <p><b>Features:</b></p>
             <p>- Arcsinh stretch with configurable alpha (up to 500) and Q parameters</p>
             <p>- Color-preserving clipping (prevents star color blowout)</p>

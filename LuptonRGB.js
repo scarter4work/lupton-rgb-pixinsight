@@ -34,7 +34,7 @@
 #error This script requires PixInsight 1.8.0 or higher.
 #endif
 
-#define VERSION "1.0.8"
+#define VERSION "1.0.9"
 #define TITLE   "Lupton RGB Stretch"
 
 // Enable automatic garbage collection
@@ -475,6 +475,74 @@ function LuptonEngine()
       return bitmap;
    };
 
+   // Generate preview at exact output size (for ScrollBox-based preview)
+   this.generatePreviewAtSize = function(sourceWindow, outWidth, outHeight, showBefore, splitPos)
+   {
+      if (!sourceWindow) return null;
+      if (outWidth <= 0 || outHeight <= 0) return null;
+
+      var image = sourceWindow.mainView.image;
+      if (!image || image.numberOfChannels < 3) return null;
+
+      var imgWidth = image.width;
+      var imgHeight = image.height;
+
+      // Create bitmap at exact requested size
+      var bitmap = new Bitmap(outWidth, outHeight);
+
+      // Calculate sampling scale
+      var scaleX = imgWidth / outWidth;
+      var scaleY = imgHeight / outHeight;
+
+      // Pre-calculate split position
+      var splitX = outWidth * splitPos / 100;
+
+      for (var py = 0; py < outHeight; py++)
+      {
+         var iy = Math.min(Math.floor(py * scaleY), imgHeight - 1);
+
+         for (var px = 0; px < outWidth; px++)
+         {
+            var ix = Math.min(Math.floor(px * scaleX), imgWidth - 1);
+
+            // Get source pixel
+            var r = image.sample(ix, iy, 0);
+            var g = image.sample(ix, iy, 1);
+            var b = image.sample(ix, iy, 2);
+
+            var rOut, gOut, bOut;
+
+            // Determine if this pixel is in "before" or "after" region
+            var isBefore = (showBefore === 1) || (showBefore === 2 && px < splitX);
+
+            if (isBefore)
+            {
+               // Show original (with basic STF-like stretch for visibility)
+               rOut = Math.min(1, r * 10);
+               gOut = Math.min(1, g * 10);
+               bOut = Math.min(1, b * 10);
+            }
+            else
+            {
+               // Apply Lupton stretch
+               var result = this.processPixel(r, g, b);
+               rOut = result[0];
+               gOut = result[1];
+               bOut = result[2];
+            }
+
+            // Convert to 8-bit and create color
+            var r8 = (rOut > 1 ? 255 : (rOut < 0 ? 0 : (rOut * 255 + 0.5) | 0));
+            var g8 = (gOut > 1 ? 255 : (gOut < 0 ? 0 : (gOut * 255 + 0.5) | 0));
+            var b8 = (bOut > 1 ? 255 : (bOut < 0 ? 0 : (bOut * 255 + 0.5) | 0));
+
+            bitmap.setPixel(px, py, 0xff000000 | (r8 << 16) | (g8 << 8) | b8);
+         }
+      }
+
+      return bitmap;
+   };
+
    // Reset to default values
    this.reset = function()
    {
@@ -776,23 +844,21 @@ function PreviewControl(parent, engine)
       this.scaledImage = null;
       if (!this.sourceWindow) return;
 
-      var showBefore = this.previewMode;
-      this.bitmap = this.engine.generatePreview(
-         this.sourceWindow,
-         this.sourceWindow.mainView.image.width,
-         this.sourceWindow.mainView.image.height,
-         showBefore,
-         this.splitPosition,
-         0, 0, 0  // Always generate at full resolution
-      );
+      var image = this.sourceWindow.mainView.image;
 
-      if (this.bitmap)
-      {
-         if (this.scale === 1)
-            this.scaledImage = this.bitmap;
-         else
-            this.scaledImage = this.bitmap.scaled(this.scale);
-      }
+      // Calculate the output size based on current scale
+      var outWidth = Math.round(image.width * this.scale);
+      var outHeight = Math.round(image.height * this.scale);
+
+      // Generate preview at the exact size we need
+      var showBefore = this.previewMode;
+      this.scaledImage = this.engine.generatePreviewAtSize(
+         this.sourceWindow,
+         outWidth,
+         outHeight,
+         showBefore,
+         this.splitPosition
+      );
    };
 
    // Force redraw - official PJSR pattern
