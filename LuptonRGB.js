@@ -28,8 +28,16 @@
 #include <pjsr/FontFamily.jsh>
 #include <pjsr/Color.jsh>
 
+// Version check - require PixInsight 1.8.0 or higher
+#iflt __PI_VERSION__ 01.08.00
+#error This script requires PixInsight 1.8.0 or higher.
+#endif
+
 #define VERSION "1.0.0"
 #define TITLE   "Lupton RGB Stretch"
+
+// Enable automatic garbage collection
+var jsAutoGC = true;
 
 // ============================================================================
 // Math.asinh polyfill for ECMA 262-5 compatibility
@@ -176,7 +184,7 @@ function LuptonEngine()
       }
       catch(e)
       {
-         Console.warningln("Auto black point calculation failed: " + e.message);
+         console.warningln("Auto black point calculation failed: " + e.message);
          return 0;
       }
    };
@@ -188,20 +196,20 @@ function LuptonEngine()
 
       if (!targetWindow)
       {
-         Console.criticalln("Error: No target window specified");
+         console.criticalln("Error: No target window specified");
          return null;
       }
 
       var sourceImage = targetWindow.mainView.image;
       if (sourceImage.numberOfChannels < 3)
       {
-         Console.criticalln("Error: Image must have at least 3 channels (RGB)");
+         console.criticalln("Error: Image must have at least 3 channels (RGB)");
          return null;
       }
 
-      Console.writeln("<b>Lupton RGB Stretch</b>");
-      Console.writeln("Processing: " + targetWindow.mainView.id);
-      Console.writeln(format("Parameters: alpha=%.2f, Q=%.2f", this.stretch, this.Q));
+      console.writeln("<b>Lupton RGB Stretch</b>");
+      console.writeln("Processing: " + targetWindow.mainView.id);
+      console.writeln(format("Parameters: alpha=%.2f, Q=%.2f", this.stretch, this.Q));
 
       var width = sourceImage.width;
       var height = sourceImage.height;
@@ -225,8 +233,11 @@ function LuptonEngine()
 
          // Copy source to output
          outputWindow.mainView.beginProcess(UndoFlag_NoSwapFile);
-         outputWindow.mainView.image.apply(sourceImage);
-         outputWindow.mainView.endProcess();
+         try {
+            outputWindow.mainView.image.apply(sourceImage);
+         } finally {
+            outputWindow.mainView.endProcess();
+         }
 
          // Apply Lupton stretch using PixelMath (two-pass for reliability)
          var alpha = this.stretch;
@@ -266,7 +277,7 @@ function LuptonEngine()
          P1.rescale = false;
          P1.truncate = false;  // Don't truncate yet - preserve values > 1
 
-         Console.writeln("Pass 1: Applying Lupton stretch...");
+         console.writeln("Pass 1: Applying Lupton stretch...");
          P1.executeOn(outputWindow.mainView);
 
          // PASS 2: Apply saturation adjustment if needed
@@ -284,7 +295,7 @@ function LuptonEngine()
             P2.rescale = false;
             P2.truncate = false;
 
-            Console.writeln("Pass 2: Applying saturation...");
+            console.writeln("Pass 2: Applying saturation...");
             P2.executeOn(outputWindow.mainView);
          }
 
@@ -301,7 +312,7 @@ function LuptonEngine()
             P3.expression2 = "max(0,$T[2]*" + clipScale + ")";
             P3.rescale = false;
             P3.truncate = true;
-            Console.writeln("Pass 3: Applying color-preserving clip...");
+            console.writeln("Pass 3: Applying color-preserving clip...");
          }
          else if (this.clippingMode == 1)
          {
@@ -311,7 +322,7 @@ function LuptonEngine()
             P3.expression2 = "min(1,max(0,$T[2]))";
             P3.rescale = false;
             P3.truncate = true;
-            Console.writeln("Pass 3: Applying hard clip...");
+            console.writeln("Pass 3: Applying hard clip...");
          }
          else
          {
@@ -321,7 +332,7 @@ function LuptonEngine()
             P3.expression2 = "$T[2]";
             P3.rescale = true;
             P3.truncate = true;
-            Console.writeln("Pass 3: Rescaling to fit...");
+            console.writeln("Pass 3: Rescaling to fit...");
          }
          P3.useSingleExpression = false;
          P3.createNewImage = false;
@@ -329,14 +340,14 @@ function LuptonEngine()
          P3.executeOn(outputWindow.mainView);
 
          var elapsed = (new Date().getTime() - startTime) / 1000;
-         Console.writeln(format("Processing completed in %.2f seconds", elapsed));
+         console.writeln(format("Processing completed in %.2f seconds", elapsed));
 
          outputWindow.show();
          return outputWindow;
       }
       catch (e)
       {
-         Console.criticalln("Error during processing: " + e.message);
+         console.criticalln("Error during processing: " + e.message);
          if (outputWindow)
          {
             outputWindow.forceClose();
@@ -1173,7 +1184,7 @@ function LuptonDialog(engine)
          var avg = (r + g + b) / 3;
          dlg.engine.blackPoint = avg;
          dlg.blackPointControl.setValue(avg);
-         Console.writeln(format("Sampled black point: %.6f", avg));
+         console.writeln(format("Sampled black point: %.6f", avg));
       }
       else
       {
@@ -1183,7 +1194,7 @@ function LuptonDialog(engine)
          dlg.blackRControl.setValue(r);
          dlg.blackGControl.setValue(g);
          dlg.blackBControl.setValue(b);
-         Console.writeln(format("Sampled black point R: %.6f, G: %.6f, B: %.6f", r, g, b));
+         console.writeln(format("Sampled black point R: %.6f, G: %.6f, B: %.6f", r, g, b));
       }
       dlg.statusLabel.text = "Black point sampled from preview";
       dlg.schedulePreviewUpdate();
@@ -1354,7 +1365,7 @@ function LuptonDialog(engine)
    {
       if (!this.targetWindow)
       {
-         Console.warningln("No image selected for auto black point calculation");
+         console.warningln("No image selected for auto black point calculation");
          return;
       }
 
@@ -1370,7 +1381,7 @@ function LuptonDialog(engine)
 
          this.engine.blackPoint = avgBp;
          this.blackPointControl.setValue(avgBp);
-         Console.writeln(format("Auto black point (linked): %.6f", avgBp));
+         console.writeln(format("Auto black point (linked): %.6f", avgBp));
       }
       else
       {
@@ -1386,7 +1397,7 @@ function LuptonDialog(engine)
          this.blackGControl.setValue(bpG);
          this.blackBControl.setValue(bpB);
 
-         Console.writeln(format("Auto black point R: %.6f, G: %.6f, B: %.6f", bpR, bpG, bpB));
+         console.writeln(format("Auto black point R: %.6f, G: %.6f, B: %.6f", bpR, bpG, bpB));
       }
 
       this.schedulePreviewUpdate();
@@ -1451,7 +1462,7 @@ function LuptonDialog(engine)
          return;
       }
 
-      Console.show();
+      console.show();
       var result = this.engine.execute(this.targetWindow);
       if (result)
       {
@@ -1479,7 +1490,7 @@ LuptonDialog.prototype = new Dialog;
 
 function main()
 {
-   Console.hide();
+   console.hide();
 
    // Check for an active image
    if (ImageWindow.activeWindow.isNull)
