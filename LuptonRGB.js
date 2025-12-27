@@ -372,9 +372,9 @@ function LuptonEngine()
       var imgWidth = image.width;
       var imgHeight = image.height;
 
-      // Limit preview size for performance (max 400x300 for fast updates)
-      var maxPreviewW = Math.min(previewWidth, 400);
-      var maxPreviewH = Math.min(previewHeight, 300);
+      // Use actual preview size, capped at 800x600 for performance
+      var maxPreviewW = Math.min(previewWidth, 800);
+      var maxPreviewH = Math.min(previewHeight, 600);
 
       // Calculate scale based on zoom level
       var scale;
@@ -680,8 +680,8 @@ function PreviewControl(parent, engine)
       var imgHeight = image.height;
 
       // Calculate scale (same logic as generatePreview)
-      var maxPreviewW = Math.min(this.width, 400);
-      var maxPreviewH = Math.min(this.height, 300);
+      var maxPreviewW = Math.min(this.width, 800);
+      var maxPreviewH = Math.min(this.height, 600);
       var scaleX = imgWidth / maxPreviewW;
       var scaleY = imgHeight / maxPreviewH;
       var scale = Math.max(scaleX, scaleY);
@@ -703,6 +703,15 @@ function PreviewControl(parent, engine)
       // Exit sampling mode
       this.samplingMode = false;
       this.cursor = new Cursor(StdCursor_Arrow);
+   };
+
+   // Handle resize - regenerate preview at new size
+   this.onResize = function(wNew, hNew, wOld, hOld)
+   {
+      if (wNew != wOld || hNew != hOld)
+      {
+         this.updatePreview();
+      }
    };
 }
 
