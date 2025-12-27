@@ -551,13 +551,11 @@ function PreviewControl(parent, engine)
    // Fit to window
    this.fitToWindow = function()
    {
-      console.writeln("fitToWindow called: setting zoomLevel=0");
       this.zoomLevel = 0;
       this.zoomFactor = 1.0;
       this.panX = 0;
       this.panY = 0;
       this.updatePreview();
-      console.writeln("fitToWindow complete");
    };
 
    // Get zoom label text
@@ -568,10 +566,10 @@ function PreviewControl(parent, engine)
       return pct + "%";
    };
 
-   // Force redraw - mirrors official PJSR PreviewControl pattern
+   // Force redraw - use repaint() for immediate redraw in PJSR
    this.forceRedraw = function()
    {
-      this.update();
+      this.repaint();
    };
 
    // Update the preview
@@ -586,6 +584,12 @@ function PreviewControl(parent, engine)
       if (!this.sourceWindow)
       {
          this.forceRedraw();
+         return;
+      }
+
+      // Don't generate preview if control has no valid dimensions yet
+      if (this.width <= 0 || this.height <= 0)
+      {
          return;
       }
 
@@ -1185,7 +1189,7 @@ function LuptonDialog(engine)
    this.realtimeCheckbox.onCheck = function(checked)
    {
       if (checked)
-         dlg.schedulePreviewUpdate();
+         dlg.forcePreviewUpdate();  // Force immediate update when enabled
    };
 
    this.beforeButton = new PushButton(this);
