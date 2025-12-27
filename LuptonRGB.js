@@ -284,7 +284,8 @@ function LuptonEngine()
             P1.truncate = false;  // Don't truncate yet - preserve values > 1
 
             console.writeln("Pass 1: Applying Lupton stretch...");
-            P1.executeOn(outputWindow.mainView);
+            if (!P1.executeOn(outputWindow.mainView))
+               throw new Error("PixelMath pass 1 failed");
 
             // PASS 2: Apply saturation adjustment if needed
             if (Math.abs(this.saturation - 1.0) > 1e-6)
@@ -302,7 +303,8 @@ function LuptonEngine()
                P2.truncate = false;
 
                console.writeln("Pass 2: Applying saturation...");
-               P2.executeOn(outputWindow.mainView);
+               if (!P2.executeOn(outputWindow.mainView))
+                  throw new Error("PixelMath pass 2 failed");
             }
 
             // PASS 3: Apply clipping based on mode
@@ -343,7 +345,8 @@ function LuptonEngine()
             P3.useSingleExpression = false;
             P3.createNewImage = false;
 
-            P3.executeOn(outputWindow.mainView);
+            if (!P3.executeOn(outputWindow.mainView))
+               throw new Error("PixelMath pass 3 failed");
          }
          finally
          {
